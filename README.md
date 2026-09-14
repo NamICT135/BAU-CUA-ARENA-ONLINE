@@ -1,8 +1,7 @@
 # Bầu Cua Arena
 
 Game bầu cua chơi chung phòng trên điện thoại và laptop, tối đa **20 người/phòng**. Chủ phòng mở cược và lắc; server phát một kết quả chung, tính xu riêng cho từng người. Chỉ sử dụng xu ảo, không nạp/rút hay đổi tiền.
-
-Phạm vi mới được thống nhất ngày 14/09/2026. Các tài liệu cũ trong `docs/archive/` chỉ để lưu trữ, không còn điều khiển lộ trình phát triển.
+- Còn cần triển khai Internet trên Render mọi người ai biết làm hosting hoặc đã từng deploy web rồi nhắn nhóm zalo nhận việc mình làm được mà lấy kinh nghiệm.
 
 ## Chạy trên máy
 
