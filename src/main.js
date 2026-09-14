@@ -1,167 +1,561 @@
+import { io } from 'socket.io-client';
 import './style.css';
 
-const symbolButtons = [...document.querySelectorAll('.symbol-card')];
-const chipButtons = [...document.querySelectorAll('.chip-button')];
-const bettingControls = document.querySelectorAll('.symbol-controls, .chip-selector, #reset-bet');
-const balanceElements = document.querySelectorAll('#balance, #result-balance, #stat-balance');
-const totalBetElement = document.getElementById('total-bet');
-const statusElement = document.getElementById('result-message');
-const selectedChipElement = document.getElementById('selected-chip-label');
-const resetButton = document.getElementById('reset-bet');
-
-// Cache each symbol's amount element once, keeping the existing semantic HTML.
-const betDisplays = symbolButtons.map(button => ({
-  symbol: button.dataset.symbol,
-  element: button.querySelector('.bet-value'),
-}));
-
+const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
+const sessionKey = 'bau-cua-arena-session';
+const socket = io({ autoConnect: false, reconnection: true, reconnectionDelay: 700, reconnectionDelayMax: 4000 });
+const number = value => Number(value).toLocaleString('vi-VN');
+const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
 let config = null;
-let currentBalance = null;
+let symbols = new Map();
+let room = null;
+let savedSession = readSession();
 let selectedChip = null;
-// The reference stays constant; only the individual bet amounts change.
-const bets = {};
+let busy = false;
+let synced = false;
+let loadingConfig = false;
+let acceptingMembership = false;
+let sessionReplaced = false;
+let connectionEpoch = 0;
+const symbolViews = new Map();
+const chipButtons = [];
 
-function setBettingEnabled(enabled) {
-  bettingControls.forEach(control => {
-    control.disabled = !enabled;
-  });
-}
-
-function showStatus(message, isError = false) {
-  statusElement.textContent = message;
-  statusElement.classList.toggle('status-error', isError);
-}
-
-async function fetchJson(path) {
-  const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(`${path}: HTTP ${response.status}`);
-  }
-  return await response.json();
-}
-
-function validateInitialData(loadedConfig, serverState) {
-  if (!Array.isArray(loadedConfig.symbols) || !Array.isArray(loadedConfig.chips)) {
-    throw new Error('The game configuration is missing symbols or chips.');
-  }
-  if (!loadedConfig.chips.length || !loadedConfig.chips.every(chip => Number.isSafeInteger(chip) && chip > 0)) {
-    throw new Error('The configuration contains invalid chip values.');
-  }
-
-  const symbolIds = loadedConfig.symbols.map(symbol => symbol.id);
-  const chipValues = chipButtons.map(button => Number(button.dataset.chip));
-  if (symbolIds.length !== symbolButtons.length ||
-      !symbolIds.every(id => symbolButtons.some(button => button.dataset.symbol === id)) ||
-      !symbolButtons.every(button => symbolIds.includes(button.dataset.symbol))) {
-    throw new Error('The symbol controls do not match the server configuration.');
-  }
-  if (loadedConfig.chips.length !== chipValues.length ||
-      !loadedConfig.chips.every(chip => chipValues.includes(chip)) ||
-      !chipValues.every(chip => loadedConfig.chips.includes(chip))) {
-    throw new Error('The chip controls do not match the server configuration.');
-  }
-  if (!Number.isSafeInteger(serverState.balance) || serverState.balance < 0 || !Array.isArray(serverState.history)) {
-    throw new Error('The server returned an invalid game state.');
-  }
-}
-
-async function loadInitialData() {
-  setBettingEnabled(false);
-  showStatus('Loading game configuration and balance…');
-
+function readSession() {
   try {
-    const loadedConfig = await fetchJson('/api/config');
-    const serverState = await fetchJson('/api/state');
-    validateInitialData(loadedConfig, serverState);
+    const value = JSON.parse(sessionStorage.getItem(sessionKey));
+    return value && typeof value.token === 'string' && typeof value.roomCode === 'string' ? value : null;
+  } catch { return null; }
+}
 
-    config = loadedConfig;
-    currentBalance = serverState.balance;
-    selectedChip = config.chips[0];
-    config.symbols.forEach(symbol => {
-      bets[symbol.id] = 0;
+function rememberSession(session) {
+  if (!session?.token) return;
+  savedSession = { token: session.token, roomCode: session.roomCode, name: ui['player-name'].value.trim() };
+  try { sessionStorage.setItem(sessionKey, JSON.stringify(savedSession)); } catch { /* The room still works when browser storage is unavailable. */ }
+}
+
+function forgetSession() {
+  savedSession = null;
+  try { sessionStorage.removeItem(sessionKey); } catch { /* Storage may be blocked by browser privacy settings. */ }
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function notice(message, isError = false) {
+  const target = room ? ui['room-notice'] : ui['lobby-status'];
+  target.textContent = message;
+  target.classList.toggle('error', isError);
+}
+
+function connectionStatus(label, state) {
+  ui['connection-label'].textContent = label;
+  ui['connection-status'].className = `connection-status ${state}`;
+}
+
+function canBet() {
+  return Boolean(room && synced && socket.connected && !busy && room.phase === 'betting' && room.you.eligible);
+}
+
+function totalBet() {
+  return room ? Object.values(room.you.bets).reduce((sum, value) => sum + value, 0) : 0;
+}
+
+function renderControls() {
+  const ready = Boolean(config && socket.connected && !busy && !acceptingMembership && !sessionReplaced);
+  ui['create-room'].disabled = !ready;
+  ui['join-room'].disabled = !ready;
+  ui['player-name'].disabled = busy || acceptingMembership;
+  ui['room-code-input'].disabled = busy || acceptingMembership;
+  ui['symbol-controls'].disabled = !canBet();
+  ui['chip-selector'].disabled = !canBet();
+  ui['reset-bet'].disabled = !canBet() || totalBet() === 0;
+  if (!room) return;
+  const isHost = room.hostId === room.you.id;
+  const available = ready && synced;
+  const betweenRounds = ['waiting', 'result'].includes(room.phase);
+  ui['host-controls'].hidden = !isHost;
+  ui['reset-room'].hidden = !isHost;
+  ui['open-round'].hidden = room.phase === 'betting' || room.phase === 'revealing';
+  ui.shake.hidden = betweenRounds;
+  ui['open-round'].disabled = !available || !isHost || !betweenRounds;
+  ui.shake.disabled = !available || !isHost || room.phase !== 'betting' || Object.values(room.boardTotals).every(value => value === 0);
+  const canReset = betweenRounds || (room.phase === 'betting' && Object.values(room.boardTotals).every(value => value === 0));
+  ui['reset-room'].disabled = !available || !isHost || !canReset;
+  ui['leave-room'].disabled = !available;
+}
+
+function renderSelectedChip() {
+  for (const button of chipButtons) {
+    const selected = Number(button.dataset.chip) === selectedChip;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
+  ui['selected-chip-label'].textContent = `Đang chọn ${number(selectedChip)} xu / mỗi lần chạm`;
+}
+
+function buildBoard() {
+  ui['game-grid'].replaceChildren();
+  ui['chip-controls'].replaceChildren();
+  symbolViews.clear();
+  chipButtons.length = 0;
+  for (const symbol of config.symbols) {
+    const button = element('button', 'symbol-card');
+    button.type = 'button';
+    button.dataset.symbol = symbol.id;
+    const icon = element('span', 'symbol-icon', symbol.icon);
+    icon.setAttribute('aria-hidden', 'true');
+    const amount = element('span', 'bet-value', '0');
+    amount.id = `bet-${symbol.id}`;
+    const betLabel = element('span', 'bet-label', 'Bạn đặt ');
+    betLabel.append(amount);
+    const total = element('span', 'board-total', 'Cả bàn: 0');
+    button.append(element('span', 'symbol-name', symbol.name.toLocaleUpperCase('vi-VN')), icon, betLabel, total);
+    button.addEventListener('click', () => placeBet(symbol.id));
+    ui['game-grid'].append(button);
+    symbolViews.set(symbol.id, { button, amount, total });
+  }
+  for (const amount of config.chips) {
+    const button = element('button', 'chip-button', number(amount));
+    button.type = 'button';
+    button.dataset.chip = String(amount);
+    button.setAttribute('aria-label', `Chip ${number(amount)} xu`);
+    button.addEventListener('click', () => {
+      if (!canBet()) return;
+      selectedChip = amount;
+      renderSelectedChip();
     });
+    chipButtons.push(button);
+    ui['chip-controls'].append(button);
+  }
+  selectedChip = config.chips[0];
+  renderSelectedChip();
+}
 
-    renderBalance();
-    renderBets();
-    renderTotalBet();
-    setSelectedChipUI();
-    attachEventListeners();
-    setBettingEnabled(true);
-    showStatus('Betting is ready. Select a chip and choose your symbols.');
-  } catch (error) {
-    setBettingEnabled(false);
-    showStatus('Could not load the game. Make sure the Node server is running, then reload the page.', true);
-    console.error('Game initialization failed:', error);
+function phaseMessage() {
+  const host = room.players.find(player => player.id === room.hostId)?.name || 'Chủ phòng';
+  if (room.phase === 'waiting') return `Phòng đã sẵn sàng. ${host} sẽ mở cược khi mọi người có mặt.`;
+  if (room.phase === 'revealing') return 'Đã khóa cược. Cả phòng đang chờ ba xúc xắc…';
+  if (room.phase === 'result') return 'Đã có kết quả! Số xu được cập nhật. Chủ phòng có thể mở ván tiếp theo.';
+  if (!room.you.eligible) return 'Bạn vào sau khi ván đã mở. Cùng xem ván này và tham gia từ ván tiếp theo nhé.';
+  if (room.you.balance === 0) return 'Bạn đã hết xu. Vẫn có thể xem cùng phòng; chủ phòng có thể đặt lại xu giữa các ván.';
+  return 'Đang mở cược. Chọn chip rồi chạm linh vật; cược chỉ được ghi nhận khi máy chủ xác nhận.';
+}
+
+function applyState(next) {
+  if (!next?.you || !config) return;
+  if (room && room.code === next.code && room.you.id === next.you.id && next.revision < room.revision) return;
+  const previous = room;
+  room = next;
+  ui.home.hidden = true;
+  ui.game.hidden = false;
+  ui['room-code'].textContent = room.code;
+  const you = room.players.find(player => player.id === room.you.id);
+  ui['player-display-name'].textContent = you?.name || '';
+  ui['your-role'].textContent = room.hostId === room.you.id ? 'Chủ phòng · Bạn điều khiển ván' : 'Người chơi';
+  ui['round-number'].textContent = `VÁN ${room.roundNumber}`;
+  const phases = { waiting: 'Chờ mở cược', betting: 'Đang mở cược', revealing: 'Đang lắc…', result: 'Đã có kết quả' };
+  ui['phase-badge'].textContent = phases[room.phase];
+  ui['phase-badge'].className = `phase-badge ${room.phase}`;
+  ui['balance'].textContent = number(room.you.balance);
+  const outstanding = ['betting', 'revealing'].includes(room.phase) ? totalBet() : 0;
+  ui['available-balance'].textContent = number(room.you.balance - outstanding);
+  ui['total-bet'].textContent = number(totalBet());
+  for (const [id, view] of symbolViews) {
+    const symbol = symbols.get(id);
+    view.amount.textContent = number(room.you.bets[id]);
+    view.total.textContent = `Cả bàn: ${number(room.boardTotals[id])}`;
+    view.button.classList.toggle('has-bet', room.you.bets[id] > 0);
+    view.button.classList.toggle('is-result', room.phase === 'result' && room.dice.includes(id));
+    view.button.setAttribute('aria-label', `${symbol.name}, bạn đặt ${number(room.you.bets[id])} xu, cả bàn ${number(room.boardTotals[id])} xu`);
+  }
+  ui['dice-area'].classList.toggle('revealing', room.phase === 'revealing');
+  ui['dice-area'].setAttribute('aria-busy', String(room.phase === 'revealing'));
+  for (let index = 0; index < 3; index += 1) {
+    const symbol = room.phase === 'result' ? symbols.get(room.dice[index]) : null;
+    ui[`dice-${index + 1}`].textContent = symbol?.icon || '?';
+    ui[`dice-${index + 1}`].setAttribute('aria-label', `Xúc xắc ${index + 1}: ${symbol?.name || 'chưa có kết quả'}`);
+  }
+  const captions = {
+    waiting: 'Chờ chủ phòng mở ván đầu tiên.',
+    betting: 'Sáu linh vật. Bạn chọn ai?',
+    revealing: 'Đang lắc… cược đã được khóa.',
+    result: room.dice.map(id => symbols.get(id)?.name).join(' · '),
+  };
+  ui['dice-caption'].textContent = captions[room.phase];
+  ui['open-round'].textContent = room.phase === 'result' ? 'Mở ván tiếp theo' : 'Mở cược';
+  ui['host-hint'].textContent = room.phase === 'betting' ? 'Lắc khi cả bàn đã đặt xong. Cược sẽ khóa ngay.' : room.phase === 'revealing' ? 'Máy chủ đang chốt kết quả cho cả phòng.' : 'Mở cược khi mọi người đã sẵn sàng.';
+  renderPlayers();
+  renderResults();
+  renderHistory();
+  renderControls();
+  if (previous && previous.hostId !== room.hostId) {
+    const host = room.players.find(player => player.id === room.hostId);
+    notice(`${host?.name || 'Một người chơi'} vừa nhận quyền chủ phòng. ${phaseMessage()}`);
+  } else if (previous && previous.roundNumber > 0 && room.roundNumber === 0) {
+    notice('Chủ phòng đã đặt lại số xu, thành tích và lịch sử. Một khởi đầu mới cho cả bàn!');
+  } else if (!previous || previous.phase !== room.phase || previous.roundId !== room.roundId || previous.you.eligible !== room.you.eligible) {
+    notice(phaseMessage());
   }
 }
 
-function selectChip(value) {
-  if (!config.chips.includes(value)) return;
-  selectedChip = value;
-  setSelectedChipUI();
-  showStatus(`Selected ${selectedChip} coins. Choose a symbol.`);
+function renderPlayers() {
+  ui['player-count'].textContent = `${room.players.length} / ${room.capacity}`;
+  ui['online-count'].textContent = `${room.players.filter(player => player.connected).length} đang kết nối`;
+  ui['player-list'].replaceChildren(...room.players.map(player => {
+    const row = element('li', `player-row${player.id === room.you.id ? ' is-you' : ''}${player.connected ? '' : ' offline'}`);
+    const avatar = element('span', 'player-avatar', [...player.name.trim()][0]?.toLocaleUpperCase('vi-VN') || '?');
+    avatar.setAttribute('aria-hidden', 'true');
+    const copy = element('span', 'player-copy');
+    copy.append(element('span', 'player-name', `${player.name}${player.id === room.you.id ? ' (bạn)' : ''}`));
+    const tags = [player.id === room.hostId ? 'Chủ phòng' : 'Người chơi'];
+    if (!player.connected) tags.push('Mất kết nối');
+    else if (!player.eligible && ['betting', 'revealing'].includes(room.phase)) tags.push('Chờ ván sau');
+    else tags.push('Đang online');
+    copy.append(element('span', 'player-detail', tags.join(' · ')));
+    row.append(avatar, copy, element('span', 'player-bet', player.betTotal > 0 ? `Đặt ${number(player.betTotal)}` : '—'));
+    return row;
+  }));
+  const ranked = [...room.players].sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name, 'vi'));
+  ui.leaderboard.replaceChildren(...ranked.map((player, index) => {
+    const row = element('li');
+    row.append(element('span', 'rank', String(index + 1).padStart(2, '0')), element('span', 'rank-name', `${player.name}${player.id === room.you.id ? ' (bạn)' : ''}`), element('span', 'rank-balance', number(player.balance)));
+    return row;
+  }));
 }
 
-function setSelectedChipUI() {
-  chipButtons.forEach(button => {
-    const isSelected = Number(button.dataset.chip) === selectedChip;
-    button.classList.toggle('selected', isSelected);
-    button.setAttribute('aria-pressed', String(isSelected));
+function renderResults() {
+  const result = room.you.lastResult;
+  const hasBet = result && result.totalBet > 0;
+  ui['result-heading'].textContent = !hasBet ? 'Chờ chút may mắn' : result.profit > 0 ? 'May mắn ghé thăm!' : result.profit < 0 ? 'Hẹn may mắn ván sau' : 'Vừa vặn hòa vốn';
+  ui['result-message'].textContent = hasBet ? 'Kết quả ván gần nhất bạn tham gia. Số xu đã được máy chủ cập nhật.' : room.phase === 'result' ? 'Bạn không đặt xu trong ván này. Cùng tham gia ván tiếp theo nhé.' : 'Kết quả xuất hiện sau mỗi ván bạn có đặt xu.';
+  ui['result-total-bet'].textContent = hasBet ? number(result.totalBet) : '—';
+  ui['result-total-return'].textContent = hasBet ? number(result.totalReturn) : '—';
+  ui['result-profit'].textContent = hasBet ? signed(result.profit) : '—';
+  ui['result-profit'].className = hasBet && result.profit > 0 ? 'positive' : hasBet && result.profit < 0 ? 'negative' : '';
+  const stats = room.you.stats;
+  ui['stat-games'].textContent = number(stats.gamesPlayed);
+  ui['stat-record'].textContent = `${stats.wins} / ${stats.losses} / ${stats.breakEven}`;
+  ui['stat-win-rate'].textContent = `${stats.gamesPlayed ? Math.round(stats.wins / stats.gamesPlayed * 100) : 0}%`;
+  ui['stat-highest-balance'].textContent = number(stats.highestBalance);
+  ui['stat-total-bet'].textContent = number(stats.totalBet);
+  ui['stat-total-returned'].textContent = number(stats.totalReturned);
+}
+
+function renderHistory() {
+  ui['history-empty'].hidden = room.history.length > 0;
+  ui['history-list'].replaceChildren(...[...room.history].sort((a, b) => b.number - a.number).map(round => {
+    const row = element('li', 'history-row');
+    const dice = element('span', 'history-dice', round.dice.map(id => symbols.get(id)?.icon).join(' '));
+    dice.setAttribute('aria-label', round.dice.map(id => symbols.get(id)?.name).join(', '));
+    const result = round.results.find(item => item.playerId === room.you.id);
+    const played = result && result.totalBet > 0;
+    const outcome = element('span', `history-outcome${played ? result.profit > 0 ? ' positive' : result.profit < 0 ? ' negative' : '' : ''}`, played ? `${signed(result.profit)} xu` : 'Không đặt xu');
+    outcome.append(element('small', '', played ? `Đặt ${number(result.totalBet)} · Nhận ${number(result.totalReturn)}` : `Cả bàn đặt ${number(round.totalBet)} xu`));
+    row.append(element('span', 'history-round', `Ván ${round.number}`), dice, outcome);
+    return row;
+  }));
+}
+
+function send(event, payload = {}) {
+  return new Promise((resolve, reject) => {
+    if (!socket.connected || sessionReplaced) {
+      reject(new Error('Đang mất kết nối. Cược chưa được gửi; hãy chờ kết nối lại.'));
+      return;
+    }
+    // Volatile emits never buffer clicks while offline. A missing acknowledgement is reconciled, never replayed.
+    socket.volatile.timeout(8000).emit(event, payload, (timeout, reply) => {
+      if (timeout) {
+        const error = new Error('Chưa nhận được xác nhận. Đang kiểm tra lại trạng thái; không tự gửi lại thao tác.');
+        error.uncertain = true;
+        reject(error);
+      } else if (!reply?.ok) {
+        const error = new Error(reply?.error?.message || 'Không thể thực hiện thao tác này.');
+        error.code = reply?.error?.code;
+        reject(error);
+      } else resolve(reply);
+    });
   });
-  selectedChipElement.textContent = `Selected: ${selectedChip} virtual coins`;
 }
 
-function getTotalBet() {
-  return Object.values(bets).reduce((sum, value) => sum + value, 0);
+function requestId() {
+  // This identifies a command for deduplication; it is not an authentication credential.
+  return globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function syncRoom(epoch = connectionEpoch) {
+  synced = false;
+  renderControls();
+  const reply = await send('room:sync');
+  if (epoch !== connectionEpoch) return;
+  rememberSession(reply.session);
+  applyState(reply.state);
+  synced = true;
+  renderControls();
+}
+
+async function mutate(event, payload, successMessage) {
+  if (!room || busy || !synced || !socket.connected) return;
+  const epoch = connectionEpoch;
+  const actionControl = document.activeElement;
+  busy = true;
+  renderControls();
+  try {
+    const reply = await send(event, { ...payload, requestId: requestId() });
+    if (epoch !== connectionEpoch) return;
+    applyState(reply.state);
+    notice(successMessage || phaseMessage());
+  } catch (error) {
+    if (epoch !== connectionEpoch) return;
+    notice(error.message, true);
+    try {
+      if (socket.connected) {
+        await syncRoom(epoch);
+        if (epoch === connectionEpoch) notice(error.uncertain ? 'Đã đồng bộ lại. Kiểm tra số xu đã đặt trước khi thao tác tiếp; yêu cầu cũ không được gửi lại.' : error.message, true);
+      }
+    } catch {
+      synced = false;
+      notice('Chưa thể đồng bộ. Đang kết nối lại để xác nhận trạng thái phòng.', true);
+      socket.disconnect().connect();
+    }
+  } finally {
+    if (epoch === connectionEpoch) {
+      busy = false;
+      renderControls();
+      // Disabling a pending button may move keyboard focus to the page body.
+      if (document.activeElement === document.body && actionControl?.isConnected && !actionControl.matches(':disabled')) {
+        actionControl.focus({ preventScroll: true });
+      }
+    }
+  }
 }
 
 function placeBet(symbol) {
-  if (!Object.hasOwn(bets, symbol)) return;
-  const availableBalance = currentBalance - getTotalBet();
-  if (selectedChip > availableBalance) {
-    showStatus(`Bet exceeds available balance. You have ${availableBalance.toLocaleString('en-US')} coins available.`, true);
+  if (!canBet()) return;
+  if (selectedChip > room.you.balance - totalBet()) {
+    notice(`Bạn chỉ còn ${number(room.you.balance - totalBet())} xu có thể đặt. Chọn chip nhỏ hơn hoặc xóa cược của mình.`, true);
     return;
   }
-
-  bets[symbol] += selectedChip;
-  renderBets();
-  renderTotalBet();
-  showStatus(`Bet placed. ${(currentBalance - getTotalBet()).toLocaleString('en-US')} coins available.`);
+  mutate('bet:add', { roundId: room.roundId, symbol, amount: selectedChip });
 }
 
-function resetBets() {
-  Object.keys(bets).forEach(symbol => {
-    bets[symbol] = 0;
-  });
-  renderBets();
-  renderTotalBet();
-  showStatus('Bets cleared. Your balance is unchanged.');
+function clearRoom(message) {
+  room = null;
+  synced = false;
+  busy = false;
+  acceptingMembership = false;
+  forgetSession();
+  ui.game.hidden = true;
+  ui.home.hidden = false;
+  ui['invite-panel'].hidden = true;
+  if (ui['reset-dialog'].open) ui['reset-dialog'].close();
+  renderControls();
+  notice(message);
 }
 
-function renderBets() {
-  betDisplays.forEach(display => {
-    display.element.textContent = bets[display.symbol].toLocaleString('en-US');
-  });
+async function enterRoom(event) {
+  if (!config || busy || acceptingMembership || !socket.connected || sessionReplaced) return;
+  const name = ui['player-name'].value.trim();
+  ui['player-name'].value = name;
+  if (!ui['player-name'].reportValidity()) return;
+  const code = ui['room-code-input'].value.trim().toUpperCase();
+  if (event === 'room:join' && !/^[A-Z0-9]{6}$/.test(code)) {
+    notice('Nhập mã phòng gồm 6 chữ cái hoặc chữ số.', true);
+    ui['room-code-input'].focus();
+    return;
+  }
+  busy = true;
+  acceptingMembership = true;
+  renderControls();
+  notice(event === 'room:create' ? 'Đang tạo một bàn chơi cho hội mình…' : 'Đang vào phòng…');
+  const epoch = connectionEpoch;
+  try {
+    const reply = await send(event, event === 'room:create' ? { name } : { name, code });
+    if (epoch !== connectionEpoch) return;
+    rememberSession(reply.session);
+    synced = true;
+    applyState(reply.state);
+    ui.game.scrollIntoView({ block: 'start' });
+  } catch (error) {
+    if (epoch !== connectionEpoch) return;
+    if (error.uncertain && socket.connected) {
+      try { await syncRoom(epoch); } catch { notice('Chưa xác nhận được việc vào phòng. Hãy thử kết nối lại; thao tác tạo/vào phòng chưa được tự gửi lại.', true); }
+    } else notice(error.message, true);
+  } finally {
+    if (epoch === connectionEpoch) { busy = false; acceptingMembership = false; renderControls(); }
+  }
 }
 
-function renderBalance() {
-  balanceElements.forEach(element => {
-    element.textContent = currentBalance.toLocaleString('en-US');
-  });
+async function resumeRoom(epoch) {
+  acceptingMembership = true;
+  synced = false;
+  renderControls();
+  notice('Đang khôi phục chỗ ngồi và đồng bộ số xu…');
+  try {
+    const reply = await send('room:resume', { token: savedSession.token });
+    if (epoch !== connectionEpoch) return;
+    rememberSession(reply.session);
+    synced = true;
+    applyState(reply.state);
+    notice('Đã kết nối lại. Chỗ ngồi, số xu và cược được khôi phục từ máy chủ.');
+  } catch (error) {
+    if (epoch !== connectionEpoch) return;
+    if (error.uncertain || !socket.connected || !['SESSION_EXPIRED', 'NOT_IN_ROOM'].includes(error.code)) {
+      notice('Chưa khôi phục được phiên chơi. Hãy thử kết nối lại; cược không được tự gửi lại.', true);
+      ui['retry-connection'].hidden = false;
+    } else {
+      clearRoom('Phiên chơi đã hết hạn hoặc máy chủ vừa khởi động lại. Bạn có thể tạo phòng mới hoặc nhập mã để tham gia lại.');
+    }
+  } finally {
+    if (epoch === connectionEpoch) { acceptingMembership = false; renderControls(); }
+  }
 }
 
-function renderTotalBet() {
-  totalBetElement.textContent = getTotalBet().toLocaleString('en-US');
+socket.on('connect', async () => {
+  const epoch = ++connectionEpoch;
+  busy = false;
+  connectionStatus('Đã kết nối', 'connected');
+  ui['retry-connection'].hidden = true;
+  if (savedSession) await resumeRoom(epoch);
+  else {
+    if (room) clearRoom('Kết nối bị ngắt trước khi nhận được phiên chơi. Vui lòng tạo hoặc vào phòng lại.');
+    synced = false;
+    renderControls();
+    notice('Sẵn sàng. Tạo phòng mới hoặc tham gia cùng bạn bè.');
+  }
+});
+
+socket.on('disconnect', () => {
+  connectionEpoch += 1;
+  synced = false;
+  busy = false;
+  acceptingMembership = false;
+  connectionStatus(sessionReplaced ? 'Phiên đã chuyển' : 'Đang kết nối lại', 'disconnected');
+  renderControls();
+  if (!sessionReplaced) notice('Mất kết nối. Đang tự kết nối lại; các nút đã khóa. Cược được máy chủ nhận trước đó vẫn được tính.', true);
+});
+
+socket.on('connect_error', () => {
+  connectionStatus('Chưa kết nối', 'disconnected');
+  ui['retry-connection'].hidden = false;
+  renderControls();
+  notice('Chưa kết nối được máy chủ. Kiểm tra mạng rồi thử lại; phòng và cược sẽ được đồng bộ khi kết nối trở lại.', true);
+});
+
+socket.on('room:state', state => {
+  if (sessionReplaced || (!room && !acceptingMembership)) return;
+  if (room && state.code !== room.code) return;
+  applyState(state);
+});
+
+socket.on('session:replaced', () => {
+  sessionReplaced = true;
+  connectionEpoch += 1;
+  socket.io.reconnection(false);
+  socket.disconnect();
+  clearRoom('Phiên chơi này đang được sử dụng ở một thẻ khác. Thẻ này đã ngắt kết nối để tránh điều khiển cùng một người chơi.');
+  connectionStatus('Phiên đã chuyển', 'disconnected');
+  ui['retry-connection'].hidden = false;
+  ui['retry-connection'].textContent = 'Kết nối như người chơi mới';
+});
+
+ui['lobby-form'].addEventListener('submit', event => { event.preventDefault(); enterRoom('room:create'); });
+ui['join-room'].addEventListener('click', () => enterRoom('room:join'));
+ui['room-code-input'].addEventListener('input', () => { ui['room-code-input'].value = ui['room-code-input'].value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+ui['room-code-input'].addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); enterRoom('room:join'); } });
+ui['reset-bet'].addEventListener('click', () => { if (canBet()) mutate('bet:clear', { roundId: room.roundId }, 'Đã xóa cược của bạn. Số xu trong ví không thay đổi.'); });
+ui['open-round'].addEventListener('click', () => { if (room) mutate('round:open', { gameId: room.gameId, roundNumber: room.roundNumber }); });
+ui.shake.addEventListener('click', () => { if (room) mutate('round:shake', { roundId: room.roundId }); });
+ui['reset-room'].addEventListener('click', () => { if (!ui['reset-room'].disabled) ui['reset-dialog'].showModal(); });
+ui['cancel-reset'].addEventListener('click', () => ui['reset-dialog'].close());
+ui['confirm-reset'].addEventListener('click', () => {
+  ui['reset-dialog'].close();
+  if (room) mutate('room:reset', { gameId: room.gameId, roundNumber: room.roundNumber });
+});
+ui['leave-room'].addEventListener('click', async () => {
+  if (!room || busy || !synced || !socket.connected) return;
+  if (['betting', 'revealing'].includes(room.phase) && totalBet() > 0) {
+    notice(room.phase === 'betting' ? 'Bạn đang có cược. Xóa cược của mình trước khi rời phòng, hoặc chờ ván kết thúc.' : 'Cược đang được tính. Bạn có thể rời phòng sau khi ván kết thúc.', true);
+    return;
+  }
+  busy = true;
+  renderControls();
+  const epoch = connectionEpoch;
+  try {
+    await send('room:leave');
+    if (epoch !== connectionEpoch) return;
+    connectionEpoch += 1;
+    clearRoom('Bạn đã rời phòng. Tạo phòng mới hoặc tham gia một bàn khác nhé.');
+    ui.home.scrollIntoView({ block: 'start' });
+  } catch (error) {
+    if (epoch === connectionEpoch) {
+      if (error.uncertain) {
+        try { await syncRoom(epoch); } catch { clearRoom('Không còn phiên chơi trong phòng. Bạn có thể vào lại bằng mã phòng.'); }
+      } else notice(error.message, true);
+    }
+  } finally { busy = false; renderControls(); }
+});
+
+ui['invite-button'].addEventListener('click', () => {
+  const link = new URL(location.href);
+  link.search = '';
+  link.hash = '';
+  link.searchParams.set('room', room.code);
+  ui['invite-link'].value = link.href;
+  ui['invite-panel'].hidden = !ui['invite-panel'].hidden;
+  ui['invite-button'].setAttribute('aria-expanded', String(!ui['invite-panel'].hidden));
+  if (!ui['invite-panel'].hidden) { ui['invite-link'].focus(); ui['invite-link'].select(); }
+});
+ui['copy-link'].addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(ui['invite-link'].value);
+    ui['copy-status'].textContent = 'Đã sao chép. Gửi liên kết này cho hội bạn nhé!';
+  } catch {
+    ui['invite-link'].focus();
+    ui['invite-link'].select();
+    ui['copy-status'].textContent = 'Liên kết đã được chọn. Nhấn giữ để sao chép trên điện thoại, hoặc Ctrl+C trên máy tính.';
+  }
+});
+ui['retry-connection'].addEventListener('click', () => {
+  sessionReplaced = false;
+  socket.io.reconnection(true);
+  ui['retry-connection'].textContent = 'Thử kết nối lại';
+  if (!config) initialize();
+  else if (socket.connected && savedSession) resumeRoom(connectionEpoch);
+  else socket.connect();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && room && socket.connected && !busy && !acceptingMembership) {
+    syncRoom().catch(() => { synced = false; renderControls(); notice('Chưa đồng bộ được phòng. Đang kết nối lại.', true); socket.disconnect().connect(); });
+  }
+});
+
+async function initialize() {
+  if (loadingConfig) return;
+  loadingConfig = true;
+  ui['retry-connection'].hidden = true;
+  notice('Đang kết nối với bàn chơi…');
+  try {
+    const response = await fetch('/api/config', { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('Không tải được cấu hình.');
+    const loaded = await response.json();
+    if (!Array.isArray(loaded.symbols) || loaded.symbols.length !== 6 || !loaded.symbols.every(symbol => typeof symbol.id === 'string' && typeof symbol.name === 'string' && typeof symbol.icon === 'string') || !Array.isArray(loaded.chips) || !loaded.chips.length || !loaded.chips.every(amount => Number.isSafeInteger(amount) && amount > 0)) throw new Error('Cấu hình không hợp lệ.');
+    config = loaded;
+    symbols = new Map(config.symbols.map(symbol => [symbol.id, symbol]));
+    buildBoard();
+    socket.connect();
+  } catch {
+    connectionStatus('Chưa kết nối', 'disconnected');
+    notice('Chưa tải được bàn chơi. Kiểm tra kết nối mạng hoặc chờ máy chủ khởi động rồi thử lại.', true);
+    ui['retry-connection'].hidden = false;
+  } finally { loadingConfig = false; renderControls(); }
 }
 
-function attachEventListeners() {
-  chipButtons.forEach(button => {
-    button.addEventListener('click', () => selectChip(Number(button.dataset.chip)));
-  });
-  symbolButtons.forEach(button => {
-    button.addEventListener('click', () => placeBet(button.dataset.symbol));
-  });
-  resetButton.addEventListener('click', resetBets);
-}
-
-loadInitialData();
+const invitation = new URLSearchParams(location.search).get('room')?.toUpperCase();
+if (invitation && /^[A-Z0-9]{6}$/.test(invitation)) ui['room-code-input'].value = invitation;
+if (savedSession?.name) ui['player-name'].value = savedSession.name;
+initialize();

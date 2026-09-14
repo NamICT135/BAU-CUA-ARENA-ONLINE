@@ -1,0 +1,18 @@
+# Creates no service by itself. Review this Blueprint in your own Render account.
+# One instance: active rooms are held in this Node process's memory.
+services:
+  - type: web
+    name: bau-cua-arena
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.20.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
