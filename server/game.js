@@ -1,7 +1,10 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 
 const CAPACITY = 20;
-const MUTATIONS = new Set(['round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset']);
+const MUTATIONS = new Set(['round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset',
+  'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result']);
+const MAX_AMOUNT = 1_000_000_000;
+const MAX_BALANCE = 1_000_000_000_000;
 
 class GameError extends Error {
   constructor(code, message) {
@@ -33,7 +36,11 @@ export class GameService {
     this.rooms = new Map();
     this.sessions = new Map();
     this.memberships = new Map();
-    this.revealMs = options.revealMs ?? 1600;
+    this.revealMs = options.revealMs ?? 2400;
+    this.autoStart = options.autoStart ?? true;
+    this.bettingMs = options.bettingMs ?? 30_000;
+    this.resultMs = options.resultMs ?? 12000;
+    this.onKick = options.onKick ?? (() => {});
     this.hostGraceMs = options.hostGraceMs ?? 5000;
     this.disconnectTtlMs = options.disconnectTtlMs ?? 5 * 60_000;
     this.roomTtlMs = options.roomTtlMs ?? 30 * 60_000;
@@ -94,12 +101,18 @@ export class GameService {
     return {
       code: room.code, gameId: room.gameId, capacity: CAPACITY, phase: room.phase, hostId: room.hostId,
       roundNumber: room.roundNumber, roundId: room.roundId, revision: room.revision,
+      serverNow: Date.now(), deadline: room.deadline, paused: room.paused,
+      locked: room.locked, remainingMs: room.remainingMs,
+      ...(player.id === room.hostId ? { admin: { forcedDice: room.forcedDice ? [...room.forcedDice] : null } } : {}),
       players: [...room.players.values()].map(entry => ({
         id: entry.id, name: entry.name, balance: entry.balance, connected: entry.connected,
         betTotal: totalBets(entry.bets), eligible: entry.eligible,
       })),
       boardTotals, dice: room.phase === 'result' ? [...room.dice] : [],
-      history: structuredClone(room.history),
+      history: structuredClone(room.history).map(round => {
+        if (player.id !== room.hostId) delete round.demo;
+        return round;
+      }),
       you: {
         id: player.id, balance: player.balance, bets: { ...player.bets }, eligible: player.eligible,
         stats: { ...player.stats }, lastResult: player.lastResult ? { ...player.lastResult } : null,
@@ -130,6 +143,12 @@ export class GameService {
       if (event === 'room:join') return this.join(socketId, payload);
       if (event === 'room:resume') return this.resume(socketId, payload);
       const { room, player } = this.member(socketId);
+      // Enforce the deadline even if the event loop has not run its timer yet.
+      if (!room.paused && room.deadline && Date.now() >= room.deadline) {
+        if (room.phase === 'betting') this.shake(room);
+        else if (room.phase === 'result') this.openRound(room);
+        this.changed(room);
+      }
       if (event === 'room:sync') return this.success(room, player, true);
       if (event === 'room:leave') return this.leave(room, player);
       requireCondition(MUTATIONS.has(event), 'UNKNOWN_COMMAND', 'Lệnh không được hỗ trợ.');
@@ -143,7 +162,7 @@ export class GameService {
         return this.success(room, player);
       }
       // Keep every accepted bet request in this round; eviction could replay a stake.
-      requireCondition(!['bet:add', 'bet:clear'].includes(event) || player.requests.size < 1000,
+      requireCondition(['room:reset', 'round:open', 'host:cancel'].includes(event) || player.requests.size < 1000,
         'ROUND_ACTION_LIMIT', 'Bạn đã thao tác quá nhiều trong vòng này. Vui lòng chờ vòng tiếp theo.');
       this.mutate(room, player, event, payload);
       player.requests.set(payload.requestId, { fingerprint });
@@ -181,9 +200,12 @@ export class GameService {
       code, gameId: randomUUID(), hostId: player.id, players: new Map(), phase: 'waiting',
       roundNumber: 0, roundId: null, revision: 0, dice: [], history: [],
       revealTimer: null, hostTimer: null, updatedAt: Date.now(),
+      phaseTimer: null, deadline: null, remainingMs: null, paused: false, locked: false,
+      forcedDice: null, demoRound: false,
     };
     this.rooms.set(code, room);
     this.addPlayer(room, player);
+    if (this.autoStart) this.openRound(room);
     this.changed(room);
     return this.success(room, player, true);
   }
@@ -194,11 +216,13 @@ export class GameService {
       'INVALID_CODE', 'Mã phòng gồm 6 chữ cái hoặc chữ số viết hoa.');
     const room = this.rooms.get(payload.code);
     requireCondition(room, 'ROOM_NOT_FOUND', 'Không tìm thấy phòng. Kiểm tra lại mã phòng.');
+    requireCondition(!room.locked, 'ROOM_LOCKED', 'Phòng đang khóa, chưa nhận người chơi mới.');
     const name = this.name(payload.name);
     requireCondition(room.players.size < CAPACITY, 'ROOM_FULL', 'Phòng đã đủ 20 người chơi.');
     requireCondition(![...room.players.values()].some(player => player.name.toLocaleLowerCase('vi') === name.toLocaleLowerCase('vi')),
       'NAME_TAKEN', 'Tên này đã có trong phòng. Vui lòng chọn tên khác.');
     const player = this.player(name, socketId);
+    player.eligible = this.autoStart && room.phase === 'betting';
     this.addPlayer(room, player);
     this.scheduleHostTransfer(room);
     this.changed(room);
@@ -271,6 +295,12 @@ export class GameService {
   }
 
   mutate(room, player, event, payload) {
+    if (event.startsWith('host:')) {
+      this.host(room, player);
+      this.currentNumber(room, payload);
+      this.administer(room, player, event, payload);
+      return;
+    }
     if (event === 'round:open' || event === 'room:reset') {
       this.host(room, player);
       this.currentNumber(room, payload);
@@ -279,6 +309,9 @@ export class GameService {
       requireCondition(['waiting', 'result'].includes(room.phase) || emptyBettingRound,
         'WRONG_PHASE', 'Hãy chờ vòng hiện tại kết thúc hoặc xóa hết cược trước khi đặt lại.');
       if (event === 'room:reset') {
+        this.clearPhaseTimer(room);
+        room.forcedDice = null;
+        room.demoRound = false;
         room.gameId = randomUUID();
         room.phase = 'waiting';
         room.roundNumber = 0;
@@ -293,36 +326,20 @@ export class GameService {
           entry.eligible = false;
           entry.requests.clear();
         }
+        if (this.autoStart) this.openRound(room);
       } else {
-        room.phase = 'betting';
-        room.roundNumber += 1;
-        room.roundId = randomUUID();
-        room.dice = [];
-        for (const entry of room.players.values()) {
-          entry.bets = this.emptyBets();
-          entry.eligible = entry.connected;
-          entry.lastResult = null;
-          entry.requests.clear();
-        }
+        this.openRound(room);
       }
       return;
     }
 
     this.currentRound(room, payload);
     requireCondition(room.phase === 'betting', 'BETTING_CLOSED', 'Hiện tại không thể thay đổi cược.');
+    requireCondition(!room.paused && (!room.deadline || Date.now() < room.deadline),
+      'BETTING_CLOSED', 'Đã hết thời gian cược hoặc phòng đang tạm dừng.');
     if (event === 'round:shake') {
       this.host(room, player);
-      requireCondition([...room.players.values()].some(entry => totalBets(entry.bets) > 0),
-        'NO_BETS', 'Cần có ít nhất một lượt cược trước khi lắc.');
-      room.phase = 'revealing';
-      const roundId = room.roundId;
-      room.revealTimer = setTimeout(() => {
-        if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== 'revealing') return;
-        room.revealTimer = null;
-        this.settle(room);
-        this.changed(room);
-      }, this.revealMs);
-      room.revealTimer.unref();
+      this.shake(room);
       return;
     }
 
@@ -333,16 +350,123 @@ export class GameService {
     }
     requireCondition(typeof payload.symbol === 'string' && this.symbolIds.includes(payload.symbol),
       'INVALID_SYMBOL', 'Biểu tượng cược không hợp lệ.');
-    requireCondition(Number.isSafeInteger(payload.amount) && this.config.chips.includes(payload.amount),
+    const amount = payload.allIn === true ? player.balance - totalBets(player.bets) : payload.amount;
+    requireCondition(Number.isSafeInteger(amount) && amount > 0 && amount <= MAX_BALANCE,
       'INVALID_AMOUNT', 'Mệnh giá cược không hợp lệ.');
-    requireCondition(totalBets(player.bets) + payload.amount <= player.balance,
+    requireCondition(totalBets(player.bets) + amount <= player.balance,
       'INSUFFICIENT_BALANCE', 'Số xu còn lại không đủ để đặt cược này.');
-    player.bets[payload.symbol] += payload.amount;
+    requireCondition(player.balance + 3 * (totalBets(player.bets) + amount) <= MAX_BALANCE,
+      'BALANCE_LIMIT', 'Cược vượt giới hạn xu an toàn của phòng.');
+    player.bets[payload.symbol] += amount;
+  }
+
+  clearPhaseTimer(room) {
+    clearTimeout(room.phaseTimer);
+    room.phaseTimer = null;
+    room.deadline = null;
+    room.remainingMs = null;
+  }
+
+  schedulePhase(room, duration) {
+    this.clearPhaseTimer(room);
+    room.remainingMs = duration;
+    if (room.paused) return;
+    room.deadline = Date.now() + duration;
+    const roundId = room.roundId;
+    const phase = room.phase;
+    room.phaseTimer = setTimeout(() => {
+      if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== phase || room.paused) return;
+      if (phase === 'betting') this.shake(room);
+      else if (phase === 'result') this.openRound(room);
+      this.changed(room);
+    }, duration);
+    room.phaseTimer.unref();
+  }
+
+  openRound(room) {
+    this.clearPhaseTimer(room);
+    room.phase = 'betting';
+    room.roundNumber += 1;
+    room.roundId = randomUUID();
+    room.dice = [];
+    room.demoRound = false;
+    for (const entry of room.players.values()) {
+      entry.bets = this.emptyBets();
+      entry.eligible = entry.connected;
+      entry.requests.clear();
+    }
+    if (this.autoStart) this.schedulePhase(room, this.bettingMs);
+  }
+
+  shake(room) {
+    this.clearPhaseTimer(room);
+    room.phase = 'revealing';
+    const roundId = room.roundId;
+    room.revealTimer = setTimeout(() => {
+      if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== 'revealing') return;
+      room.revealTimer = null;
+      this.settle(room);
+      this.changed(room);
+    }, this.revealMs);
+    room.revealTimer.unref();
+  }
+
+  administer(room, host, event, payload) {
+    if (event === 'host:lock') {
+      requireCondition(typeof payload.locked === 'boolean', 'INVALID_VALUE', 'Trạng thái khóa không hợp lệ.');
+      room.locked = payload.locked;
+      return;
+    }
+    if (event === 'host:pause') {
+      requireCondition(typeof payload.paused === 'boolean', 'INVALID_VALUE', 'Trạng thái tạm dừng không hợp lệ.');
+      if (room.paused === payload.paused) return;
+      const remaining = room.deadline ? Math.max(0, room.deadline - Date.now()) : room.remainingMs;
+      room.paused = payload.paused;
+      if (['betting', 'result'].includes(room.phase)) this.schedulePhase(room, remaining ?? this.bettingMs);
+      return;
+    }
+    if (event === 'host:result') {
+      requireCondition(room.phase === 'betting', 'WRONG_PHASE', 'Chỉ chọn kết quả demo khi đang mở cược.');
+      requireCondition(payload.dice === null || (Array.isArray(payload.dice) && payload.dice.length === 3 &&
+        payload.dice.every(id => this.symbolIds.includes(id))), 'INVALID_DICE', 'Hãy chọn đủ ba linh vật hợp lệ.');
+      room.forcedDice = payload.dice ? [...payload.dice] : null;
+      return;
+    }
+    if (event === 'host:cancel') {
+      requireCondition(room.phase === 'betting', 'WRONG_PHASE', 'Chỉ hủy được ván chưa lắc.');
+      room.forcedDice = null;
+      this.openRound(room); // Bets are reserved, so clearing them releases every stake.
+      return;
+    }
+    const target = room.players.get(payload.playerId);
+    requireCondition(target, 'PLAYER_NOT_FOUND', 'Người chơi đã rời phòng.');
+    if (event === 'host:grant') {
+      requireCondition(room.phase !== 'revealing', 'WRONG_PHASE', 'Chờ lắc xong để cấp xu.');
+      requireCondition(Number.isSafeInteger(payload.amount) && payload.amount > 0 && payload.amount <= MAX_AMOUNT &&
+        target.balance + payload.amount + 3 * totalBets(target.bets) <= MAX_BALANCE,
+      'INVALID_AMOUNT', 'Số xu cấp phải là số nguyên từ 1 đến 1 tỷ và không vượt giới hạn ví.');
+      target.balance += payload.amount;
+      target.stats.highestBalance = Math.max(target.stats.highestBalance, target.balance);
+    } else if (event === 'host:kick') {
+      requireCondition(target.id !== host.id, 'INVALID_TARGET', 'Hãy dùng nút rời phòng để rời bàn.');
+      requireCondition(room.phase !== 'revealing', 'WRONG_PHASE', 'Chờ kết quả trước khi đuổi người chơi.');
+      const socketId = target.socketId;
+      this.removePlayer(room, target);
+      if (socketId) this.onKick(socketId);
+    } else if (event === 'host:transfer') {
+      requireCondition(target.id !== host.id && target.connected, 'INVALID_TARGET', 'Chọn một người chơi khác đang online.');
+      clearTimeout(room.hostTimer);
+      room.hostTimer = null;
+      room.hostId = target.id;
+    }
   }
 
   settle(room) {
     if (!['revealing', 'betting'].includes(room.phase)) return;
-    const dice = Array.from({ length: 3 }, () => this.symbolIds[this.randomIntFn(this.symbolIds.length)]);
+    this.clearPhaseTimer(room);
+    room.demoRound = Boolean(room.forcedDice);
+    const dice = room.forcedDice ?? Array.from({ length: 3 }, () => this.symbolIds[this.randomIntFn(this.symbolIds.length)]);
+    room.forcedDice = null;
     const results = [];
     for (const player of room.players.values()) {
       const totalBet = totalBets(player.bets);
@@ -362,10 +486,12 @@ export class GameService {
     room.phase = 'result';
     room.history.unshift({
       id: room.roundId, number: room.roundNumber, dice: [...dice], createdAt: new Date().toISOString(),
+      demo: room.demoRound,
       totalBet: results.reduce((sum, result) => sum + result.totalBet, 0),
       totalReturn: results.reduce((sum, result) => sum + result.totalReturn, 0), results,
     });
     room.history = room.history.slice(0, 20);
+    if (this.autoStart) this.schedulePhase(room, this.resultMs);
   }
 
   disconnect(socketId) {
@@ -402,7 +528,8 @@ export class GameService {
     const now = Date.now();
     for (const room of this.rooms.values()) {
       const hasConnectedPlayer = [...room.players.values()].some(player => player.connected);
-      if (!hasConnectedPlayer && now - room.updatedAt >= this.roomTtlMs) {
+      const lastDisconnect = Math.max(...[...room.players.values()].map(player => player.disconnectedAt ?? now));
+      if (!hasConnectedPlayer && now - lastDisconnect >= this.roomTtlMs) {
         // Resolve accepted stakes before expiring an abandoned in-memory room.
         if (['betting', 'revealing'].includes(room.phase)) this.settle(room);
         this.deleteRoom(room);
@@ -421,6 +548,7 @@ export class GameService {
   }
 
   deleteRoom(room) {
+    this.clearPhaseTimer(room);
     clearTimeout(room.revealTimer);
     clearTimeout(room.hostTimer);
     for (const player of room.players.values()) {

@@ -1,6 +1,6 @@
 # Bầu Cua Arena
 
-Game bầu cua chơi chung phòng trên điện thoại và laptop, tối đa **20 người/phòng**. Chủ phòng mở cược và lắc; server phát một kết quả chung, tính xu riêng cho từng người. Chỉ sử dụng xu ảo, không nạp/rút hay đổi tiền.
+Game bầu cua chơi chung phòng trên điện thoại và laptop, tối đa **20 người/phòng**. Server tự mở cược 30 giây, lắc và tính xu riêng cho từng người; sau 5 giây xem kết quả sẽ mở ván mới. Chỉ sử dụng xu ảo, không nạp/rút hay đổi tiền. Xem [bàn tự động và quyền host](docs/AUTOMATIC_ROOMS.md).
 - Còn cần triển khai Internet trên Render mọi người ai biết làm hosting hoặc đã từng deploy web rồi nhắn nhóm zalo nhận việc mình làm được mà lấy kinh nghiệm.
 
 ## Chạy trên máy
@@ -30,13 +30,13 @@ Mở **http://localhost:5173**. Vite chuyển `/api` và `/socket.io` tới Node
 
 1. Nhập tên và tạo phòng. Người tạo là chủ phòng, cũng có thể đặt cược.
 2. Gửi link mời hoặc mã phòng cho bạn bè. Mỗi trình duyệt/tab là một người chơi, tối đa 20 ghế.
-3. Chủ phòng mở ván. Mọi người chọn mệnh giá rồi bấm biểu tượng; số cược được server xác nhận.
-4. Chủ phòng lắc để khóa cược. Sau hiệu ứng ngắn, cả phòng xem cùng ba biểu tượng.
-5. Theo dõi số xu, bảng xếp hạng và lịch sử; chủ phòng mở ván tiếp theo.
+3. Ván mở ngay khi tạo phòng. Chọn chip, số xu tùy chọn hoặc All-in rồi bấm biểu tượng; server xác nhận cược.
+4. Hết 30 giây, server khóa cược và tự lắc. Sau hiệu ứng ngắn, cả phòng xem cùng ba biểu tượng.
+5. Theo dõi số xu, bảng xếp hạng và lịch sử; ván tiếp theo tự mở sau 5 giây.
 
 Ví dụ cược 50 xu vào Cua: xuất hiện 0 lần → nhận 0; 1 lần → nhận 100; 2 lần → nhận 150; 3 lần → nhận 200. Số nhận đã bao gồm hoàn cược. Lãi/lỗ = tổng nhận − tổng cược.
 
-Cược không làm giảm số dư cho tới khi chốt ván. Tổng cược được giữ trong giới hạn số dư. Người vào giữa ván chờ ván kế tiếp. Người mất kết nối vẫn được tính kết quả cho cược đã nhận. Khôi phục cùng tab sẽ dùng phiên cũ; chủ phòng mất mạng được chuyển quyền sau một khoảng chờ ngắn. Chủ phòng chỉ có thể bắt đầu lại phiên chơi giữa các ván hoặc khi ván đang mở chưa có cược nào. Không được đặt lại trong lúc lắc hoặc khi còn cược chưa tính.
+Cược không làm giảm số dư cho tới khi chốt ván. Tổng cược được giữ trong giới hạn số dư. Người vào trong thời gian cược có thể chơi ngay. Người mất kết nối vẫn được tính kết quả cho cược đã nhận. Khôi phục cùng tab sẽ dùng phiên cũ; chủ phòng mất mạng được chuyển quyền sau một khoảng chờ ngắn. Host có thể tạm dừng, khóa phòng, cấp xu, đuổi người, chuyển quyền, hủy ván chưa lắc để hoàn cược hoặc đặt lại phiên khi không có cược chưa chốt. Kết quả do host chọn được đánh dấu là ván demo.
 
 ## Kiến trúc
 

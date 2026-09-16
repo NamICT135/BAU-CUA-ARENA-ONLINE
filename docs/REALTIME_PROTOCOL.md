@@ -1,6 +1,6 @@
 # Bau Cua Arena — Multiplayer protocol
 
-Current design approved 2026-09-14: host-controlled private rooms, up to 20 players including host, shared dice, virtual coins only. Browser = Vite + vanilla JavaScript. Single authoritative Node HTTP + Socket.IO process serves the built frontend in production. No old phase restrictions apply.
+Current design: automatic private rooms, up to 20 players including host, shared dice, virtual coins only. Browser = Vite + vanilla JavaScript. Single authoritative Node HTTP + Socket.IO process serves the built frontend in production. Creating a room opens a 30-second betting round; results stay visible for 5 seconds before the next round. See [automatic room and admin protocol](AUTOMATIC_ROOMS.md) for host commands and timer fields.
 
 ## Client commands and acknowledgments
 
@@ -11,11 +11,11 @@ Every Socket.IO command uses an acknowledgment. Success: `{ ok: true, state, ses
 - `room:resume` `{ token }` — opaque server-issued bearer token. Restore the same player/balance/bets, replacing an older socket for that identity.
 - `room:sync` `{}` — obtain a fresh personalized snapshot and private session for the current membership; recovers a lost create/join acknowledgment without creating another player.
 - `room:leave` `{}` — explicit exit; reject while that player has an unsettled nonzero bet. A disconnected player's accepted bet still settles.
-- `round:open` `{ requestId, gameId, roundNumber }` — host only, waiting/result phase, compare current roundNumber then increment; new server roundId, clear bets, eligible connected players. No automatic betting deadline.
-- `bet:add` `{ requestId, roundId, symbol, amount }` — eligible player, betting phase, configured positive integer chip, valid symbol, total cannot exceed server balance.
+- `round:open` `{ requestId, gameId, roundNumber }` — optional host override in waiting/result phase, compare current roundNumber then increment; new server roundId, clear bets, eligible connected players, 30-second server deadline.
+- `bet:add` `{ requestId, roundId, symbol, amount }` — eligible player before the betting deadline, positive integer amount, valid symbol, total cannot exceed server balance. Use `allIn: true` instead of amount to stake the server-computed available balance. Paused rooms reject bets.
 - `bet:clear` `{ requestId, roundId }` — own bets, betting phase only.
-- `round:shake` `{ requestId, roundId }` — host only, betting phase with at least one accepted bet. Lock synchronously, reveal after about 1600ms, server crypto randomInt for three independent dice, settle exactly once.
-- `room:reset` `{ requestId, gameId, roundNumber }` — host only, waiting/result phase or an empty betting round with no accepted bets; reset every balance/statistic/history, new waiting session roundNumber=0. UI must confirm this action.
+- `round:shake` `{ requestId, roundId }` — optional host override in active betting phase. Lock synchronously, reveal after about 1600ms and settle once. Ordinary rounds use crypto randomInt; a host-selected demo round uses its validated triple and is marked as demo. Empty rounds also settle automatically.
+- `room:reset` `{ requestId, gameId, roundNumber }` — host only, waiting/result phase or an empty betting round with no accepted bets; reset every balance/statistic/history, rotate gameId and start round 1. Preserve room lock/pause. UI must confirm this action.
 
 Accepted mutations with requestId are deduplicated for the whole current round. At 1,000 cached requests, further bet edits are rejected until a new round; accepted IDs are never evicted mid-round. Caches clear on new rounds/resets, where old roundId/gameId guards apply. Round IDs and roundNumber reject stale commands. A UUID gameId changes on room reset and is required for open/reset to reject commands from an earlier game. Do not silently replay offline clicks; a timeout should request fresh state rather than add the chip again. Cached mutation acks return current state rather than stale snapshots.
 

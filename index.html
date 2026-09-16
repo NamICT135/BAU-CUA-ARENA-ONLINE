@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 
 <head>
   <meta charset="UTF-8" />
@@ -15,8 +15,8 @@
   <a class="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
   <header class="site-header">
     <nav class="main-nav page-width" aria-label="Điều hướng chính">
-      <a class="brand" href="#main-content"><span class="brand-mark" aria-hidden="true">✳</span><span>BẦU CUA
-          <strong>ARENA</strong></span></a>
+      <a class="brand" href="#main-content"><span class="brand-mark" aria-hidden="true">$</span><span>baucua
+          <strong>.vip</strong></span></a>
       <div class="nav-end"><a class="rules-link" href="#how-to-play">Cách chơi</a><span id="connection-status"
           class="connection-status" role="status"><span class="connection-dot" aria-hidden="true"></span><span
             id="connection-label">Đang kết nối</span></span></div>
@@ -27,7 +27,7 @@
   <main id="main-content" class="page-width" tabindex="-1">
     <section id="home" class="lobby" aria-labelledby="hero-heading">
       <div class="hero-content">
-        <p class="eyebrow"><span aria-hidden="true">✳</span> MỘT TRÒ QUEN · MỘT CÁCH VUI MỚI</p>
+        <p class="eyebrow"><span aria-hidden="true">$</span> MỘT TRÒ QUEN · MỘT CÁCH VUI MỚI</p>
         <h1 id="hero-heading">Cùng vui.<br />Cùng <em>một bàn.</em></h1>
         <p class="hero-description">Nạp tiền vô dễ thắng lắm</p>
         <div class="hero-tags"><span>2–20 người</span><span>Chơi trên điện thoại</span><span>Không cần tài khoản</span>
@@ -65,7 +65,8 @@
           <p class="room-subtitle"><span id="player-display-name">—</span><span class="middot">·</span><span
               id="your-role">Người chơi</span></p>
         </div>
-        <div class="room-tools"><button id="invite-button" type="button" class="button button-secondary">Mời bạn <span
+        <div class="arena-wordmark" aria-label="Bầu Cua Arena"><span>Bầu Cua</span><small>VUI LÀ CHÍNH · MAY LÀ ĐỊNH</small></div>
+        <div class="room-tools"><a class="button button-secondary" href="#host-panel" id="host-settings-link" hidden>Quản trị</a><button id="invite-button" type="button" class="button button-secondary">Mời bạn <span
               aria-hidden="true">↗</span></button><button id="leave-room" type="button" class="text-button">Rời
             phòng</button></div>
       </header>
@@ -85,12 +86,17 @@
                 <h2 id="board-heading">Bàn bầu cua</h2>
               </div><span id="phase-badge" class="phase-badge">Chờ mở cược</span>
             </header>
+            <div class="dealer-stage">
+            <div class="round-clock"><span id="countdown-label">THỜI GIAN ĐẶT CƯỢC</span><strong id="round-countdown" role="timer">30s</strong><span class="clock-track"><span id="clock-progress"></span></span></div>
             <div id="dice-area" class="dice-area" role="group" aria-label="Ba xúc xắc của cả phòng">
               <div class="dice-row"><span id="dice-1" class="dice-slot"
                   aria-label="Xúc xắc 1: chưa có kết quả">?</span><span id="dice-2" class="dice-slot"
                   aria-label="Xúc xắc 2: chưa có kết quả">?</span><span id="dice-3" class="dice-slot"
                   aria-label="Xúc xắc 3: chưa có kết quả">?</span></div>
               <p id="dice-caption">Chờ chủ phòng mở ván đầu tiên.</p>
+              <button id="view-bowl" type="button" class="text-button" hidden>Xem bát xúc xắc</button>
+            </div>
+            <p class="table-motto">PHÁT TÀI PHÁT LỘC <span>✦</span> VẠN SỰ NHƯ Ý</p>
             </div>
             <div class="wallet-row">
               <p>Ví của bạn <strong><span id="balance">—</span> <small>xu</small></strong></p>
@@ -103,6 +109,7 @@
             <fieldset id="chip-selector" class="chip-selector" disabled>
               <legend>CHỌN CHIP</legend>
               <div id="chip-controls" class="chip-controls"></div>
+              <div class="custom-chip-row"><button id="all-in" class="chip-button" type="button" aria-pressed="false">ALL-IN</button><label for="custom-chip">Số xu tùy chọn<input id="custom-chip" type="number" min="1" max="1000000000000" step="1" inputmode="numeric" placeholder="Nhập số xu" /></label><button id="apply-chip" type="button" class="button button-secondary">Chọn mức cược</button></div>
               <p id="selected-chip-label" class="field-hint">—</p>
             </fieldset>
             <div class="game-actions">
@@ -145,7 +152,7 @@
             </header>
             <p id="online-count" class="field-hint">—</p>
             <ul id="player-list" class="player-list"></ul>
-            <p class="sidebar-footnote">Chủ phòng mở cược và lắc cho tất cả. Người vào giữa ván sẽ tham gia từ ván sau.
+            <p class="sidebar-footnote">Tự động lắc sau 30 giây. Bạn có thể vào cược khi đồng hồ còn thời gian.
             </p>
           </section>
           <section class="panel leaderboard-panel" aria-labelledby="leaderboard-heading">
@@ -157,6 +164,24 @@
           </section>
           <button id="reset-room" type="button" class="text-button reset-room" hidden disabled>Đặt lại cả phòng về ban
             đầu</button>
+          <section id="host-panel" class="panel host-panel" aria-labelledby="host-panel-heading" hidden>
+            <p class="eyebrow">CHỈ DÀNH CHO CHỦ PHÒNG</p>
+            <h2 id="host-panel-heading">Quản trị bàn chơi</h2>
+            <p class="field-hint">Cược 30 giây, lắc tự động. Có 12 giây để mở bát trước ván mới.</p>
+            <fieldset id="admin-controls">
+              <legend>Quyền điều khiển phòng</legend>
+              <div class="admin-actions"><button id="pause-room" type="button" class="button button-secondary">Tạm dừng</button><button id="lock-room" type="button" class="button button-secondary">Khóa phòng</button><button id="cancel-round" type="button" class="button button-secondary">Hủy ván, hoàn cược</button></div>
+              <label for="admin-player">Người chơi</label><select id="admin-player"></select>
+              <label for="grant-amount">Cấp thêm xu ảo</label><input id="grant-amount" type="number" min="1" max="1000000000" step="1" value="1000" inputmode="numeric" />
+              <div class="admin-actions"><button id="grant-coins" type="button" class="button button-primary">Cấp xu</button><button id="kick-player" type="button" class="button button-secondary">Đuổi khỏi phòng</button><button id="transfer-host" type="button" class="button button-secondary">Chuyển quyền host</button></div>
+              <details class="demo-controls"><summary>Kết quả demo cho ván hiện tại</summary>
+                <p class="field-hint">Chỉ host thấy lựa chọn này. Áp dụng một ván; ván sau tự trở về ngẫu nhiên.</p>
+                <div class="demo-dice"><label for="demo-dice-1">Xúc xắc 1<select id="demo-dice-1"></select></label><label for="demo-dice-2">Xúc xắc 2<select id="demo-dice-2"></select></label><label for="demo-dice-3">Xúc xắc 3<select id="demo-dice-3"></select></label></div>
+                <p id="demo-selection-status" class="field-hint" role="status">Ngẫu nhiên</p>
+                <div class="admin-actions"><button id="set-result" type="button" class="button button-secondary">Áp dụng demo</button><button id="random-result" type="button" class="button button-secondary">Dùng ngẫu nhiên</button></div>
+              </details>
+            </fieldset>
+          </section>
         </aside>
       </div>
       <section id="statistics" class="statistics-section" aria-labelledby="statistics-heading">
@@ -215,8 +240,8 @@
       <div class="rules-content">
         <ol class="rules-list">
           <li><strong>Tụ họp.</strong> Một người tạo phòng, gửi mã hoặc liên kết cho hội bạn.</li>
-          <li><strong>Đặt xu.</strong> Chủ phòng mở cược. Chọn chip rồi chạm một hoặc nhiều linh vật.</li>
-          <li><strong>Cùng chờ.</strong> Chủ phòng lắc. Cả phòng nhận cùng ba xúc xắc từ máy chủ.</li>
+          <li><strong>Đặt xu.</strong> Ván tự mở khi tạo phòng. Chọn chip, nhập số xu hoặc All-in rồi chạm linh vật.</li>
+          <li><strong>Cùng chờ.</strong> Sau 30 giây, bát xuất hiện và tự lắc. Kéo bát lên hoặc dùng thanh mở bát để từ từ xem kết quả. Ván mới tự mở sau 12 giây.</li>
           <li><strong>Xem kết quả.</strong> Linh vật xuất hiện <strong>k</strong> lần: nhận về <strong>số xu đặt × (k +
               1)</strong>, gồm cả vốn. Không xuất hiện: mất số xu đã đặt.</li>
         </ol>
@@ -232,6 +257,23 @@
       <p>Xu ảo thôi. Niềm vui là thật.</p><a href="#main-content">Lên đầu trang ↑</a>
     </div>
   </footer>
+  <dialog id="bowl-dialog" class="bowl-dialog" aria-labelledby="bowl-heading" aria-describedby="bowl-instructions">
+    <div class="bowl-modal-heading"><span id="bowl-round" class="eyebrow">KẾT QUẢ VÁN</span><button id="close-bowl" type="button" class="bowl-close" aria-label="Thu nhỏ bát xúc xắc">×</button></div>
+    <h2 id="bowl-heading">Đang lắc xúc xắc…</h2>
+    <p id="bowl-instructions">Cược đã khóa. Cùng chờ chút may mắn.</p>
+    <div id="bowl-stage" class="bowl-stage" data-state="shaking">
+      <div class="bowl-plate" aria-hidden="true"></div>
+      <div id="bowl-dice" class="bowl-dice" aria-label="Kết quả ba xúc xắc" aria-hidden="true"></div>
+      <div id="bowl-lid" class="bowl-lid" aria-hidden="true"><img src="/assets/arena/bowl.png" alt="" draggable="false" /></div>
+    </div>
+    <div class="bowl-reveal-controls">
+      <label for="bowl-lift">Mở bát từ từ <span id="bowl-lift-percent">0%</span></label>
+      <input id="bowl-lift" type="range" min="0" max="100" value="0" step="1" disabled />
+      <div class="bowl-modal-actions"><button id="reveal-bowl" class="button button-primary" type="button" disabled>Mở bát</button><button id="finish-bowl" class="button button-secondary" type="button" hidden>Về bàn chơi</button></div>
+    </div>
+    <p id="bowl-outcome" role="status" aria-live="polite"></p>
+    <p class="bowl-next">Ván tiếp theo sau <strong id="bowl-next-countdown">—</strong> · Chỉ dùng xu ảo</p>
+  </dialog>
   <dialog id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-description">
     <h2 id="reset-dialog-title">Bắt đầu lại cùng cả phòng?</h2>
     <p id="reset-dialog-description">Số xu, thành tích và lịch sử của tất cả người chơi sẽ về ban đầu. Không thể hoàn

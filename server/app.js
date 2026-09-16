@@ -7,7 +7,8 @@ import { GameService } from './game.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const events = ['room:create', 'room:join', 'room:resume', 'room:sync', 'room:leave',
-  'round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset'];
+  'round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset',
+  'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result'];
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
@@ -87,6 +88,7 @@ export async function createGameServer(options = {}) {
   game = new GameService(config, {
     ...options,
     onState: (socketId, state) => io.to(socketId).emit('room:state', state),
+    onKick: socketId => io.to(socketId).emit('room:kicked'),
     onReplace: socketId => {
       const oldSocket = io.sockets.sockets.get(socketId);
       oldSocket?.emit('session:replaced');

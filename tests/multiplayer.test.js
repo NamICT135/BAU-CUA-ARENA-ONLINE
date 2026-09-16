@@ -6,7 +6,7 @@ import { io } from 'socket.io-client';
 import { createGameServer } from '../server.js';
 
 async function setup(t, options = {}) {
-  const app = await createGameServer({ revealMs: 35, hostGraceMs: 60, ...options });
+  const app = await createGameServer({ autoStart: false, revealMs: 35, hostGraceMs: 60, ...options });
   const address = await app.listen(0, '127.0.0.1');
   const url = `http://127.0.0.1:${address.port}`;
   const clients = [];
@@ -181,4 +181,23 @@ test('HTTP API remains JSON; source and archive files are not publicly served', 
     const response = await fetch(url + path);
     assert.equal(response.status, 404, path);
   }
+});
+
+test('20 sockets auto-settle without host actions; host commands and kick are wired over Socket.IO', async t => {
+  const { connect } = await setup(t, { autoStart: true, bettingMs: 1200, resultMs: 1000 });
+  const host = await connect();
+  const created = await success(host, 'room:create', { name: 'Auto host' });
+  const guests = await Promise.all(Array.from({ length: 19 }, () => connect()));
+  const joins = await Promise.all(guests.map((socket, index) => success(socket, 'room:join', { name: `Auto ${index}`, code: created.state.code })));
+  const stamp = { gameId: created.state.gameId, roundNumber: 1 };
+  assert.equal((await command(guests[0], 'host:grant', mutation({ ...stamp, playerId: joins[0].session.playerId, amount: 50 }))).error.code, 'HOST_ONLY');
+  await success(host, 'host:grant', mutation({ ...stamp, playerId: joins[0].session.playerId, amount: 50 }));
+  await Promise.all([host, ...guests].map(socket => success(socket, 'bet:add', mutation({ roundId: created.state.roundId, symbol: 'cua', amount: 37 }))));
+  await waitUntil(() => [host, ...guests].every(socket => socket.snapshot?.phase === 'result'));
+  assert.equal(host.snapshot.history[0].totalBet, 20 * 37);
+  assert.ok(guests.every(socket => JSON.stringify(socket.snapshot.dice) === JSON.stringify(host.snapshot.dice)));
+  const kicked = new Promise(resolve => guests[0].once('room:kicked', resolve));
+  await success(host, 'host:kick', mutation({ ...stamp, playerId: joins[0].session.playerId }));
+  await kicked;
+  assert.equal((await command(guests[0], 'room:sync')).error.code, 'NOT_IN_ROOM');
 });

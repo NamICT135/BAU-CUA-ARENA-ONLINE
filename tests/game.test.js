@@ -16,7 +16,7 @@ test('payout includes stake for 1/2/3 matches; zero matches loses only the stake
 });
 
 function gameFor(t, options = {}) {
-  const game = new GameService(config, { revealMs: 10, ...options });
+  const game = new GameService(config, { autoStart: false, revealMs: 10, ...options });
   t.after(() => game.close());
   return game;
 }
@@ -28,7 +28,7 @@ function ok(game, socketId, event, payload = {}) {
 }
 
 test('dedupe retains accepted IDs beyond 200 edits; exhausted cache never reapplies a bet', () => {
-  const game = new GameService(config);
+  const game = new GameService(config, { autoStart: false });
   try {
     const created = ok(game, 'host', 'room:create', { name: 'Chủ phòng' });
     const opened = ok(game, 'host', 'round:open', { requestId: 'open', gameId: created.state.gameId, roundNumber: 0 });
