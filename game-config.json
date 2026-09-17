@@ -1,12 +1,41 @@
 {
-  "initialBalance": 1000,
-  "chips": [10, 50, 100, 500],
+  "initialBalance": 100000,
+  "chips": [
+    10,
+    50,
+    100,
+    500
+  ],
   "symbols": [
-    { "id": "bau", "name": "Bầu", "icon": "🍐" },
-    { "id": "cua", "name": "Cua", "icon": "🦀" },
-    { "id": "tom", "name": "Tôm", "icon": "🦐" },
-    { "id": "ca", "name": "Cá", "icon": "🐟" },
-    { "id": "ga", "name": "Gà", "icon": "🐓" },
-    { "id": "nai", "name": "Nai", "icon": "🦌" }
+    {
+      "id": "bau",
+      "name": "Bầu",
+      "icon": "🍐"
+    },
+    {
+      "id": "cua",
+      "name": "Cua",
+      "icon": "🦀"
+    },
+    {
+      "id": "tom",
+      "name": "Tôm",
+      "icon": "🦐"
+    },
+    {
+      "id": "ca",
+      "name": "Cá",
+      "icon": "🐟"
+    },
+    {
+      "id": "ga",
+      "name": "Gà",
+      "icon": "🐓"
+    },
+    {
+      "id": "nai",
+      "name": "Nai",
+      "icon": "🦌"
+    }
   ]
 }

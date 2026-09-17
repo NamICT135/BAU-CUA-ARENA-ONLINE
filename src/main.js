@@ -8,6 +8,7 @@ const sessionKey = 'bau-cua-arena-session';
 const socket = io({ autoConnect: false, reconnection: true, reconnectionDelay: 700, reconnectionDelayMax: 4000 });
 const number = value => Number(value).toLocaleString('vi-VN');
 const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
+const DEFAULT_CHIPS = [1000, 5000, 10000, 50000, 100000];
 
 // Định dạng tiền gọn gàng như sòng bài (vd: 56.2M, 1.5M, 100K)
 function formatCompactCoins(num) {
@@ -17,6 +18,10 @@ function formatCompactCoins(num) {
   if (val >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
   if (val >= 1_000) return (val / 1_000).toFixed(0) + 'K';
   return number(val);
+}
+
+function bettingChipValues() {
+  return config?.chips?.length === 5 ? config.chips : DEFAULT_CHIPS;
 }
 
 let config = null;
@@ -45,7 +50,7 @@ if (backgroundMusic) {
 function startBackgroundMusic() {
   if (!audioEnabled || !backgroundMusic || !backgroundMusic.paused) return;
   const playback = backgroundMusic.play();
-  if (playback?.catch) playback.catch(() => {});
+  if (playback?.catch) playback.catch(() => { });
 }
 
 function syncBackgroundMusic() {
@@ -61,11 +66,10 @@ document.addEventListener('visibilitychange', syncBackgroundMusic);
 
 // Giả lập danh sách người chơi VIP cho phòng đầy đủ, sang trọng như ảnh mẫu
 const MOCK_VIPS = [
-  { name: 'Minh Quân', vip: 8, balance: 56200000, avatar: 'symbol-ga.png' },
-  { name: 'Lan Hương', vip: 6, balance: 32800000, avatar: 'symbol-cua.png' },
-  { name: 'Quốc Thắng', vip: 5, balance: 28400000, avatar: 'symbol-nai.png' },
+  { name: 'Quang Thuần', vip: 10, balance: 56200000, avatar: 'symbol-ga.png' },
+  { name: 'Đức Thịnh', vip: 6, balance: 32800000, avatar: 'symbol-cua.png' },
   { name: 'Thảo Vy', vip: 4, balance: 17900000, avatar: 'symbol-ca.png' },
-  { name: 'Hoàng Nam', vip: 3, balance: 12600000, avatar: 'symbol-tom.png' },
+  { name: 'Tọc Thịnh', vip: 1, balance: 1000, avatar: 'symbol-tom.png' },
 ];
 
 // Khởi tạo bộ âm thanh Web Audio API
@@ -144,12 +148,12 @@ function readSession() {
 function rememberSession(session) {
   if (!session?.token) return;
   savedSession = { token: session.token, roomCode: session.roomCode, name: ui['player-name'].value.trim() };
-  try { sessionStorage.setItem(sessionKey, JSON.stringify(savedSession)); } catch {}
+  try { sessionStorage.setItem(sessionKey, JSON.stringify(savedSession)); } catch { }
 }
 
 function forgetSession() {
   savedSession = null;
-  try { sessionStorage.removeItem(sessionKey); } catch {}
+  try { sessionStorage.removeItem(sessionKey); } catch { }
 }
 
 function element(tag, className, text) {
@@ -200,6 +204,7 @@ function renderControls() {
   ui['room-code-input'].disabled = busy || acceptingMembership;
   ui['symbol-controls'].disabled = !canBet();
   ui['reset-bet'].disabled = !canBet() || totalBet() === 0;
+  for (const button of chipButtons) button.disabled = !canBet();
 
   if (!room) return;
   const isHost = room.hostId === room.you.id;
@@ -233,12 +238,10 @@ function renderControls() {
 
 function renderSelectedChip() {
   for (const button of chipButtons) {
-    const selected = Number(button.dataset.chip) === selectedChip;
+    const value = button.dataset.chip === 'all' ? 'all' : Number(button.dataset.chip);
+    const selected = value === selectedChip;
     button.classList.toggle('selected', selected);
     button.setAttribute('aria-pressed', String(selected));
-  }
-  if (ui['all-in']) {
-    ui['all-in'].classList.toggle('selected', selectedChip === 'all');
   }
 }
 
@@ -255,7 +258,7 @@ function chipAssetName(amount) {
 
 function renderPlacedChips(container, amount) {
   if (!container) return;
-  const configuredChips = config?.chips?.length === 5 ? config.chips : [1000, 5000, 10000, 50000, 100000];
+  const configuredChips = bettingChipValues();
   const denominations = [...configuredChips]
     .filter(value => Number.isSafeInteger(value) && value > 0)
     .sort((left, right) => right - left);
@@ -324,7 +327,7 @@ function buildBoard() {
   }
 
   // 5 Mức Chip: 1K (1000), 5K (5000), 10K (10000), 50K (50000), 100K (100000)
-  const chipList = config.chips && config.chips.length === 5 ? config.chips : [1000, 5000, 10000, 50000, 100000];
+  const chipList = bettingChipValues();
   const chipFileNames = ['1k', '5k', '10k', '50k', '100k'];
 
   chipList.forEach((amount, idx) => {
@@ -349,6 +352,11 @@ function buildBoard() {
     chipButtons.push(chipBtn);
     ui['chip-controls'].append(chipBtn);
   });
+
+  if (ui['all-in']) {
+    chipButtons.push(ui['all-in']);
+    ui['chip-controls'].append(ui['all-in']);
+  }
 
   selectedChip = chipList[0] || 1000;
 
@@ -513,7 +521,7 @@ function renderPlayers() {
 
   // Nếu ít người chơi, thêm VIP mẫu để bàn luôn nhộn nhịp như casino thật
   const displayList = [...realPlayers];
-  if (displayList.length < 5) {
+  if (displayList.length < 7) {
     for (const mock of MOCK_VIPS) {
       if (!displayList.some(p => p.name === mock.name)) {
         displayList.push({
@@ -525,7 +533,7 @@ function renderPlayers() {
           connected: true,
         });
       }
-      if (displayList.length >= 5) break;
+      if (displayList.length >= 7) break;
     }
   }
 
@@ -648,6 +656,14 @@ async function mutate(event, payload, successMessage) {
 function placeBet(symbol) {
   if (!canBet()) return;
   const outstanding = totalBet();
+  if (selectedChip === 'all') {
+    if (room.you.balance - outstanding <= 0) {
+      notice(`Bạn không còn xu khả dụng để cược ALL IN.`, true);
+      return;
+    }
+    mutate('bet:add', { roundId: room.roundId, symbol, allIn: true });
+    return;
+  }
   if (selectedChip > room.you.balance - outstanding) {
     notice(`Số xu còn lại không đủ để đặt mức này.`, true);
     return;
@@ -788,10 +804,19 @@ if (ui['confirm-bet-btn']) {
   });
 }
 
+if (ui['all-in']) {
+  ui['all-in'].addEventListener('click', () => {
+    if (!canBet()) return;
+    selectedChip = 'all';
+    playSound('chip');
+    renderSelectedChip();
+  });
+}
+
 // Điều hướng Carousel Chip
 if (ui['chip-prev']) {
   ui['chip-prev'].addEventListener('click', () => {
-    const chipList = config?.chips || [1000, 5000, 10000, 50000, 100000];
+    const chipList = [...bettingChipValues(), 'all'];
     const currIdx = chipList.indexOf(selectedChip);
     const newIdx = currIdx > 0 ? currIdx - 1 : chipList.length - 1;
     selectedChip = chipList[newIdx];
@@ -802,7 +827,7 @@ if (ui['chip-prev']) {
 
 if (ui['chip-next']) {
   ui['chip-next'].addEventListener('click', () => {
-    const chipList = config?.chips || [1000, 5000, 10000, 50000, 100000];
+    const chipList = [...bettingChipValues(), 'all'];
     const currIdx = chipList.indexOf(selectedChip);
     const newIdx = currIdx < chipList.length - 1 ? currIdx + 1 : 0;
     selectedChip = chipList[newIdx];
@@ -824,7 +849,7 @@ if (ui['quick-add-coin']) {
 if (ui['request-fullscreen']) {
   ui['request-fullscreen'].addEventListener('click', () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
+      document.documentElement.requestFullscreen?.().catch(() => { });
     }
   });
 }

@@ -13,11 +13,14 @@
   --border-gold: #c99b4a;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -78,8 +81,16 @@ html, body {
 }
 
 @keyframes rotatePhone {
-  0%, 30% { transform: rotate(0deg); }
-  70%, 100% { transform: rotate(-90deg); }
+
+  0%,
+  30% {
+    transform: rotate(0deg);
+  }
+
+  70%,
+  100% {
+    transform: rotate(-90deg);
+  }
 }
 
 .rotate-arrow {
@@ -92,8 +103,17 @@ html, body {
 }
 
 @keyframes pulseRotate {
-  0%, 100% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); }
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 .rotate-card h2 {
@@ -140,13 +160,14 @@ html, body {
 
 .arcade-stage {
   position: relative;
+  container-type: size;
   aspect-ratio: 16 / 9;
   width: min(100vw, calc(100vh * 16 / 9));
   height: min(100vh, calc(100vw * 9 / 16));
   max-width: 100vw;
   max-height: 100vh;
   background: url('/assets/arena/background-complete.png') center center / 100% 100% no-repeat;
-  box-shadow: 0 0 70px rgba(0,0,0,0.95), 0 0 140px rgba(185, 30, 20, 0.25);
+  box-shadow: 0 0 70px rgba(0, 0, 0, 0.95), 0 0 140px rgba(185, 30, 20, 0.25);
   overflow: hidden;
 }
 
@@ -202,7 +223,8 @@ html, body {
   margin-bottom: 5px;
 }
 
-.input-group input, .join-row input {
+.input-group input,
+.join-row input {
   width: 100%;
   height: 42px;
   padding: 0 14px;
@@ -215,7 +237,8 @@ html, body {
   outline: none;
 }
 
-.input-group input:focus, .join-row input:focus {
+.input-group input:focus,
+.join-row input:focus {
   border-color: #ffd875;
   box-shadow: 0 0 10px rgba(255, 216, 117, 0.3);
 }
@@ -245,7 +268,8 @@ html, body {
   transform: translateY(1px);
 }
 
-.btn-gold-primary:disabled, .btn-gold-secondary:disabled {
+.btn-gold-primary:disabled,
+.btn-gold-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   filter: grayscale(0.6);
@@ -259,7 +283,8 @@ html, body {
   color: #a88d71;
 }
 
-.lobby-or::before, .lobby-or::after {
+.lobby-or::before,
+.lobby-or::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -268,8 +293,13 @@ html, body {
   background: #573a21;
 }
 
-.lobby-or::before { left: 0; }
-.lobby-or::after { right: 0; }
+.lobby-or::before {
+  left: 0;
+}
+
+.lobby-or::after {
+  right: 0;
+}
 
 .join-row {
   display: flex;
@@ -338,7 +368,7 @@ html, body {
   pointer-events: none;
 }
 
-.top-header > * {
+.top-header>* {
   pointer-events: auto;
 }
 
@@ -365,7 +395,7 @@ html, body {
   top: -10px;
   left: -4px;
   font-size: 16px;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
   z-index: 2;
 }
 
@@ -447,8 +477,8 @@ html, body {
 }
 
 .btn-add-coin {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -466,19 +496,140 @@ html, body {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
-/* Logo Bầu Cua Vàng Kim (Ở giữa) */
+/* =========================================================
+   LOGO BẦU CUA
+   ========================================================= */
+
+/* Vị trí logo mặc định - Desktop */
 .brand-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: -6px;
+  position: absolute !important;
+
+  left: 55% !important;
+  top: 98% !important;
+
+  /* Giữ vị trí lệch phải như thiết kế hiện tại */
+  transform: translateX(30%);
+
+  z-index: 10;
+
+  /* Không chặn click các thành phần phía dưới */
+  pointer-events: none;
 }
 
+
+/* =========================================================
+   LOGO - DESKTOP
+   ========================================================= */
+
 .brand-logo {
-  height: clamp(52px, 8.5vh, 80px);
+  display: block;
+
+  /* Desktop giữ logo lớn */
+  height: clamp(60px, 10vh, 90px);
   width: auto;
-  filter: drop-shadow(0 4px 16px rgba(255, 180, 40, 0.45));
+
+  max-width: 30vw;
+
+  object-fit: contain;
+
+  filter:
+    drop-shadow(0 4px 16px rgba(255, 180, 40, 0.45));
+
+  /* Hiệu ứng nổi lên xuống */
+  animation: moveLogo 1.2s ease-in-out infinite !important;
+
+  will-change: transform;
 }
+
+
+/* =========================================================
+   ANIMATION LÊN XUỐNG
+   ========================================================= */
+
+@keyframes moveLogo {
+
+  0%,
+  100% {
+    transform: translateY(-7px);
+  }
+
+  50% {
+    transform: translateY(7px);
+  }
+
+}
+
+
+/* =========================================================
+   TABLET / MOBILE DỌC
+   ========================================================= */
+
+@media (max-width: 768px) and (orientation: portrait) {
+
+  .brand-center {
+    left: 53% !important;
+    top: 75px !important;
+  }
+
+  .brand-logo {
+    height: clamp(38px, 8vh, 58px);
+    width: auto;
+
+    max-width: 45vw;
+  }
+
+}
+
+
+/* =========================================================
+   MOBILE XOAY NGANG
+   ========================================================= */
+
+@media (max-height: 500px) and (orientation: landscape) {
+
+  .brand-center {
+    left: 100% !important;
+    top: 50px !important;
+  }
+
+  .brand-logo {
+    /*
+      Mobile ngang:
+      điều khiển bằng WIDTH thay vì HEIGHT
+      để logo không quá lớn
+    */
+    width: clamp(45px, 14vh, 75px) !important;
+    height: auto !important;
+
+    max-width: 75px !important;
+    max-height: none !important;
+  }
+
+}
+
+
+/* =========================================================
+   MOBILE NGANG RẤT NHỎ
+   ví dụ màn hình cao <= 400px
+   ========================================================= */
+
+@media (max-height: 400px) and (orientation: landscape) {
+
+  .brand-center {
+    left: 54% !important;
+    top: 22px !important;
+  }
+
+  .brand-logo {
+    width: clamp(40px, 13vh, 60px) !important;
+    height: auto !important;
+
+    max-width: 60px !important;
+  }
+
+}
+
+
 
 /* Cụm nút công cụ (Góc phải) */
 .top-actions {
@@ -550,7 +701,8 @@ html, body {
   color: #f7d591;
 }
 
-.sh-title, .sh-count {
+.sh-title,
+.sh-count {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -688,7 +840,7 @@ html, body {
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e6dcd0 65%, #c5b4a0 100%);
   border: 1.5px solid #dca74d;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -733,7 +885,7 @@ html, body {
   cursor: pointer;
 }
 
-.stats-footer-btn > span:first-child {
+.stats-footer-btn>span:first-child {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -766,7 +918,7 @@ html, body {
   pointer-events: none;
 }
 
-.center-stage-top > * {
+.center-stage-top>* {
   pointer-events: auto;
 }
 
@@ -778,7 +930,7 @@ html, body {
   border-radius: 12px;
   padding: 6px 10px;
   text-align: center;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.6), inset 0 0 10px rgba(0,0,0,0.8);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 .floating-card .card-label {
@@ -836,22 +988,37 @@ html, body {
   background: #f7ce5f;
   animation: blinkDot 1.4s infinite alternate;
 }
-.p-dot:nth-child(2) { animation-delay: 0.3s; }
-.p-dot:nth-child(3) { animation-delay: 0.6s; }
+
+.p-dot:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.p-dot:nth-child(3) {
+  animation-delay: 0.6s;
+}
 
 @keyframes blinkDot {
-  0% { opacity: 0.2; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1.3); }
+  0% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
 }
 
 /* Khu vực Bát Sứ & 3 Xúc Xắc */
 .bowl-pedestal-stage {
   position: relative;
+  flex: 0 0 48%;
   width: 48%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
 }
 
 .bowl-pedestal-stage.is-idle .stage-bowl-tray {
@@ -868,9 +1035,10 @@ html, body {
   z-index: 4;
 }
 
+/*ba viên xúc xắc sau khi lắc xong ỏ ngoài background*/
 .dice-3d-preview {
   position: absolute;
-  bottom: 4%;
+  bottom: -10%;
   z-index: 3;
   display: flex;
   align-items: flex-end;
@@ -882,19 +1050,29 @@ html, body {
   pointer-events: none;
 }
 
+/*chỉnh kích thước xx ngoài sảnh*/
 .dice-3d-preview img {
   width: 34%;
   height: 100%;
   object-fit: contain;
 }
 
-.dice-3d-preview img:nth-child(1) { transform: rotate(-9deg) translateY(3px); }
-.dice-3d-preview img:nth-child(2) { transform: rotate(2deg) translateY(-3px); }
-.dice-3d-preview img:nth-child(3) { transform: rotate(10deg) translateY(4px); }
+.dice-3d-preview img:nth-child(1) {
+  transform: rotate(-9deg) translateY(3px);
+}
 
+.dice-3d-preview img:nth-child(2) {
+  transform: rotate(2deg) translateY(-3px);
+}
+
+.dice-3d-preview img:nth-child(3) {
+  transform: rotate(10deg) translateY(4px);
+}
+
+/*đĩa xúc xắc ngoài sảnh*/
 .stage-bowl-tray {
   position: absolute;
-  bottom: -24%;
+  bottom: -50%;
   z-index: 1;
   width: clamp(135px, 17vw, 215px);
   height: auto;
@@ -904,13 +1082,14 @@ html, body {
   transition: opacity 180ms ease, visibility 180ms ease;
 }
 
+/*ba con xúc xắc trong menu mở */
 .die-slot {
-  width: clamp(34px, 3.8vw, 50px);
-  height: clamp(34px, 3.8vw, 50px);
+  width: clamp(100px, 12vw, 158px);
+  height: clamp(50px, 6.8vw, 88px);
   border-radius: 10px;
   background: radial-gradient(circle at 35% 30%, #fffef8 0%, #ece2d0 60%, #cdbeaa 100%);
   border: 1.5px solid #dca74d;
-  box-shadow: 0 5px 12px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.9);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.9);
   display: grid;
   place-items: center;
   padding: 4px;
@@ -928,19 +1107,36 @@ html, body {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 7px;
+  border-radius: 9px;
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
   box-shadow: none;
 }
 
-.die-face[data-symbol='nai'] { background-image: url('/assets/arena/die-nai.png'); }
-.die-face[data-symbol='bau'] { background-image: url('/assets/arena/die-bau.png'); }
-.die-face[data-symbol='ga'] { background-image: url('/assets/arena/die-ga.png'); }
-.die-face[data-symbol='ca'] { background-image: url('/assets/arena/die-ca.png'); }
-.die-face[data-symbol='cua'] { background-image: url('/assets/arena/die-cua.png'); }
-.die-face[data-symbol='tom'] { background-image: url('/assets/arena/die-tom.png'); }
+.die-face[data-symbol='nai'] {
+  background-image: url('/assets/arena/die-nai.png');
+}
+
+.die-face[data-symbol='bau'] {
+  background-image: url('/assets/arena/die-bau.png');
+}
+
+.die-face[data-symbol='ga'] {
+  background-image: url('/assets/arena/die-ga.png');
+}
+
+.die-face[data-symbol='ca'] {
+  background-image: url('/assets/arena/die-ca.png');
+}
+
+.die-face[data-symbol='cua'] {
+  background-image: url('/assets/arena/die-cua.png');
+}
+
+.die-face[data-symbol='tom'] {
+  background-image: url('/assets/arena/die-tom.png');
+}
 
 .dice-mark {
   font-size: 20px;
@@ -951,12 +1147,14 @@ html, body {
 /* Bát sứ Phúc đậy trên xúc xắc */
 .stage-bowl-lid {
   position: absolute;
-  top: -20%;
-  width: clamp(118px, 15vw, 190px);
+  top: auto;
+  /* Bát ngoài s */
+  bottom: -26%;
+  width: clamp(150px, 15vw, 190px);
   height: auto;
   z-index: 10;
   cursor: pointer;
-  filter: drop-shadow(0 10px 22px rgba(0,0,0,0.85));
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.85));
   transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.4s;
   touch-action: pan-y;
 }
@@ -977,14 +1175,27 @@ html, body {
 }
 
 @keyframes bowlVibrate {
-  0% { transform: translate(-3px, -2px) rotate(-1.5deg); }
-  50% { transform: translate(3px, 2px) rotate(1.5deg); }
-  100% { transform: translate(-2px, 3px) rotate(-1deg); }
+  0% {
+    transform: translate(-3px, -2px) rotate(-1.5deg);
+  }
+
+  50% {
+    transform: translate(3px, 2px) rotate(1.5deg);
+  }
+
+  100% {
+    transform: translate(-2px, 3px) rotate(-1deg);
+  }
 }
 
 @keyframes diceRattle {
-  from { transform: translate(-4px, 1px) rotate(-1deg); }
-  to { transform: translate(4px, -2px) rotate(1deg); }
+  from {
+    transform: translate(-4px, 1px) rotate(-1deg);
+  }
+
+  to {
+    transform: translate(4px, -2px) rotate(1deg);
+  }
 }
 
 /* Khi mở bát tại chỗ */
@@ -1035,14 +1246,56 @@ html, body {
   overflow: visible;
   pointer-events: auto;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.bet-spot:nth-child(1) { --spot-x: 35%; --spot-y: 53.5%; --chip-x: 53%; --chip-y: 57%; }
-.bet-spot:nth-child(2) { --spot-x: 50%; --spot-y: 53.5%; --chip-x: 50%; --chip-y: 56%; }
-.bet-spot:nth-child(3) { --spot-x: 65.5%; --spot-y: 53.5%; --chip-x: 50%; --chip-y: 54%; }
-.bet-spot:nth-child(4) { --spot-x: 33.6%; --spot-y: 70.6%; --chip-x: 47%; --chip-y: 44%; width: 15.5%; }
-.bet-spot:nth-child(5) { --spot-x: 50%; --spot-y: 70.6%; --chip-x: 50%; --chip-y: 48%; width: 15.5%; }
-.bet-spot:nth-child(6) { --spot-x: 66.4%; --spot-y: 70.6%; --chip-x: 52%; --chip-y: 46%; width: 15.5%; }
+.bet-spot:nth-child(1) {
+  --spot-x: 35%;
+  --spot-y: 53.5%;
+  --chip-x: 53%;
+  --chip-y: 57%;
+}
+
+.bet-spot:nth-child(2) {
+  --spot-x: 50%;
+  --spot-y: 53.5%;
+  --chip-x: 50%;
+  --chip-y: 56%;
+}
+
+.bet-spot:nth-child(3) {
+  --spot-x: 65.5%;
+  --spot-y: 53.5%;
+  --chip-x: 50%;
+  --chip-y: 54%;
+}
+
+.bet-spot:nth-child(4) {
+  --spot-x: 33.6%;
+  --spot-y: 70.6%;
+  --chip-x: 47%;
+  --chip-y: 44%;
+  width: 15.5%;
+}
+
+.bet-spot:nth-child(5) {
+  --spot-x: 50%;
+  --spot-y: 70.6%;
+  --chip-x: 50%;
+  --chip-y: 48%;
+  width: 15.5%;
+}
+
+.bet-spot:nth-child(6) {
+  --spot-x: 66.4%;
+  --spot-y: 70.6%;
+  --chip-x: 52%;
+  --chip-y: 46%;
+  width: 15.5%;
+}
 
 .bet-spot::after {
   content: '';
@@ -1054,11 +1307,24 @@ html, body {
   pointer-events: none;
 }
 
-.bet-spot:hover:not(:disabled)::after,
 .bet-spot:focus-visible::after {
   border-color: rgba(255, 235, 151, 0.82);
   box-shadow: inset 0 0 18px rgba(255, 214, 79, 0.28), 0 0 16px rgba(255, 205, 62, 0.72);
   transform: scale(1.03);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bet-spot:hover:not(:disabled)::after {
+    border-color: rgba(255, 235, 151, 0.82);
+    box-shadow: inset 0 0 18px rgba(255, 214, 79, 0.28), 0 0 16px rgba(255, 205, 62, 0.72);
+    transform: scale(1.03);
+  }
+}
+
+/* Giữ điểm neo tuyệt đối khi nhấn nhanh/nhấn giữ. Quy tắc chung
+   button:active trong style.css không được phép làm vùng cược nhảy vị trí. */
+button.bet-spot:active:not(:disabled) {
+  transform: translate(-50%, -50%);
 }
 
 .bet-spot:active:not(:disabled)::after {
@@ -1089,14 +1355,32 @@ html, body {
   animation: chipLand 220ms cubic-bezier(0.2, 0.9, 0.25, 1.25) both;
 }
 
-.placed-chip:nth-child(1) { transform: translate(-50%, -50%) rotate(-7deg); }
-.placed-chip:nth-child(2) { transform: translate(-24%, -66%) rotate(9deg); }
-.placed-chip:nth-child(3) { transform: translate(-78%, -72%) rotate(-12deg); }
-.placed-chip:nth-child(4) { transform: translate(-46%, -98%) rotate(4deg); }
+.placed-chip:nth-child(1) {
+  transform: translate(-50%, -50%) rotate(-7deg);
+}
+
+.placed-chip:nth-child(2) {
+  transform: translate(-24%, -66%) rotate(9deg);
+}
+
+.placed-chip:nth-child(3) {
+  transform: translate(-78%, -72%) rotate(-12deg);
+}
+
+.placed-chip:nth-child(4) {
+  transform: translate(-46%, -98%) rotate(4deg);
+}
 
 @keyframes chipLand {
-  from { opacity: 0; margin-top: -24px; }
-  to { opacity: 1; margin-top: 0; }
+  from {
+    opacity: 0;
+    margin-top: -24px;
+  }
+
+  to {
+    opacity: 1;
+    margin-top: 0;
+  }
 }
 
 /* Huy hiệu hiển thị xu đã cược */
@@ -1111,7 +1395,7 @@ html, body {
   font-size: 10px;
   font-weight: 900;
   color: #240c02;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.6);
   z-index: 6;
   display: none;
 }
@@ -1133,7 +1417,7 @@ html, body {
   font-size: 8.5px;
   font-weight: 700;
   color: #a8dfbc;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 /* Hiệu ứng trúng thưởng hào quang rực rỡ */
@@ -1142,8 +1426,15 @@ html, body {
 }
 
 @keyframes winHalo {
-  0% { filter: drop-shadow(0 0 10px rgba(255, 225, 100, 0.4)); transform: translate(-50%, -50%) scale(1.01); }
-  100% { filter: drop-shadow(0 0 28px rgba(255, 235, 120, 0.95)); transform: translate(-50%, -50%) scale(1.05); }
+  0% {
+    filter: drop-shadow(0 0 10px rgba(255, 225, 100, 0.4));
+    transform: translate(-50%, -50%) scale(1.01);
+  }
+
+  100% {
+    filter: drop-shadow(0 0 28px rgba(255, 235, 120, 0.95));
+    transform: translate(-50%, -50%) scale(1.05);
+  }
 }
 
 /* ===================================================================
@@ -1243,7 +1534,18 @@ html, body {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
+}
+
+.chip-slot-btn.chip-all-in-btn {
+  flex: 0 0 auto;
+  width: clamp(82px, 7.4vw, 150px);
+  height: clamp(42px, 4.8vw, 70px);
+  border-radius: 12px;
+}
+
+.chip-all-in-btn img {
+  pointer-events: none;
 }
 
 .chip-slot-btn:hover:not(:disabled) {
@@ -1262,6 +1564,11 @@ html, body {
   border-radius: 50%;
   border: 2px solid #fff0a8;
   box-shadow: 0 0 10px #f5ce75;
+}
+
+.chip-slot-btn.chip-all-in-btn.selected::after {
+  inset: 1px;
+  border-radius: 12px;
 }
 
 /* Nút Xóa cược & Đặt cược to màu đỏ */
@@ -1304,8 +1611,15 @@ html, body {
 }
 
 @keyframes pulseBetBtn {
-  0%, 100% { filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.66)) drop-shadow(0 0 5px rgba(216, 39, 30, 0.48)); }
-  50% { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 13px rgba(255, 74, 44, 0.86)); }
+
+  0%,
+  100% {
+    filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.66)) drop-shadow(0 0 5px rgba(216, 39, 30, 0.48));
+  }
+
+  50% {
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 13px rgba(255, 74, 44, 0.86));
+  }
 }
 
 .btn-confirm-bet:hover {
@@ -1345,7 +1659,7 @@ html, body {
   border-radius: 22px;
   padding: 24px;
   color: #ffeed5;
-  box-shadow: 0 0 50px rgba(0,0,0,0.9), 0 0 30px rgba(220, 160, 50, 0.2);
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(220, 160, 50, 0.2);
 }
 
 .modal-header {
@@ -1447,9 +1761,9 @@ html, body {
 .bowl-plate {
   position: absolute;
   left: 50%;
-  bottom: -25px;
+  bottom: -100px;
   z-index: 0;
-  width: 205px;
+  width: 320px;
   transform: translateX(-50%) scaleY(0.58);
   transform-origin: center;
   filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.48));
@@ -1472,12 +1786,13 @@ html, body {
   z-index: 1;
 }
 
+/* bát trong menu mở */
 .modal-bowl-lid {
   position: absolute;
-  top: 0;
+  top: -50px;
   left: 50%;
   transform: translateX(-50%) translateY(calc(var(--lift, 0) * -120px));
-  width: 170px;
+  width: 260px;
   z-index: 5;
   transition: transform 0.15s ease-out;
 }
@@ -1564,7 +1879,7 @@ html, body {
   font-size: 11.5px;
   font-weight: 700;
   color: #ffdf94;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.8);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.8);
   z-index: 100;
   pointer-events: none;
 }
@@ -1609,13 +1924,34 @@ html, body {
     height: 34px;
   }
 
-  .vip-crown { display: none; }
-  .player-name { max-width: 82px; font-size: 9px; }
-  .room-code-badge { font-size: 7px; }
-  .balance-value { font-size: 10px; }
-  .balance-pill { padding-left: 5px; }
-  .brand-logo { height: 48px; }
-  .top-actions { gap: 5px; }
+  .vip-crown {
+    display: none;
+  }
+
+  .player-name {
+    max-width: 82px;
+    font-size: 9px;
+  }
+
+  .room-code-badge {
+    font-size: 7px;
+  }
+
+  .balance-value {
+    font-size: 10px;
+  }
+
+  .balance-pill {
+    padding-left: 5px;
+  }
+
+  .brand-logo {
+    height: 48px;
+  }
+
+  .top-actions {
+    gap: 5px;
+  }
 
   .circle-btn {
     width: 32px;
@@ -1637,13 +1973,37 @@ html, body {
     font-size: 8px;
   }
 
-  .vip-players-list { gap: 3px; padding: 3px 0; }
-  .vip-player-row { gap: 3px; padding: 3px; border-radius: 6px; }
-  .vip-player-avatar-wrap { width: 25px; height: 25px; }
-  .vip-crown-mini { display: none; }
-  .vip-level-tag { font-size: 6px; }
-  .vip-player-name { font-size: 7px; }
-  .vip-player-coin { font-size: 7px; }
+  .vip-players-list {
+    gap: 3px;
+    padding: 3px 0;
+  }
+
+  .vip-player-row {
+    gap: 3px;
+    padding: 3px;
+    border-radius: 6px;
+  }
+
+  .vip-player-avatar-wrap {
+    width: 25px;
+    height: 25px;
+  }
+
+  .vip-crown-mini {
+    display: none;
+  }
+
+  .vip-level-tag {
+    font-size: 6px;
+  }
+
+  .vip-player-name {
+    font-size: 7px;
+  }
+
+  .vip-player-coin {
+    font-size: 7px;
+  }
 
   .history-grid-20 {
     gap: 2px;
@@ -1674,13 +2034,32 @@ html, body {
     border-radius: 8px;
   }
 
-  .floating-card .card-label { font-size: 6px; letter-spacing: 0; }
-  .floating-card .digital-clock { font-size: 19px; }
-  .floating-card .phase-text { font-size: 7px; }
-  .stage-bowl-lid { width: 105px; }
-  .dice-3d-preview { width: 112px; }
+  .floating-card .card-label {
+    font-size: 6px;
+    letter-spacing: 0;
+  }
 
-  .spot-board-total { min-width: 42px; padding: 1px 3px; font-size: 6px; }
+  .floating-card .digital-clock {
+    font-size: 19px;
+  }
+
+  .floating-card .phase-text {
+    font-size: 7px;
+  }
+
+  .stage-bowl-lid {
+    width: 105px;
+  }
+
+  .dice-3d-preview {
+    width: 112px;
+  }
+
+  .spot-board-total {
+    min-width: 42px;
+    padding: 1px 3px;
+    font-size: 6px;
+  }
 
   .bottom-control-bar {
     bottom: 0.6%;
@@ -1695,14 +2074,45 @@ html, body {
     font-size: 17px;
   }
 
-  .chips-carousel-wrap { gap: 3px; }
-  .carousel-arrow { display: none; }
-  .chip-rack { gap: 1px; }
-  .chip-slot-btn { width: 44px; height: 44px; }
+  .chips-carousel-wrap {
+    gap: 3px;
+  }
 
-  .bet-actions-wrap { gap: 3px; }
-  .btn-clear-bet { width: 104px; height: 44px; padding: 0; background-size: 104px 38px; }
-  .btn-confirm-bet { width: 112px; height: 44px; padding: 0; background-size: 112px 39px; }
+  .carousel-arrow {
+    display: none;
+  }
+
+  .chip-rack {
+    gap: 1px;
+  }
+
+  .chip-slot-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .chip-slot-btn.chip-all-in-btn {
+    width: clamp(72px, 11vw, 82px);
+    height: 44px;
+  }
+
+  .bet-actions-wrap {
+    gap: 3px;
+  }
+
+  .btn-clear-bet {
+    width: 104px;
+    height: 44px;
+    padding: 0;
+    background-size: 104px 38px;
+  }
+
+  .btn-confirm-bet {
+    width: 112px;
+    height: 44px;
+    padding: 0;
+    background-size: 112px 39px;
+  }
 }
 
 /* Dynamic visibility must win over component display declarations above. */
@@ -1719,10 +2129,35 @@ summary:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+
+  *,
+  *::before,
+  *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================= */
+/* LOGO - ĐIỆN THOẠI XOAY NGANG */
+/* PHẢI ĐẶT Ở CUỐI FILE */
+/* ========================================= */
+
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+
+  .brand-center {
+    left: 60% !important;
+    top: 50px !important;
+
+    transform: translateX(0) !important;
+  }
+
+  .brand-logo {
+    width: clamp(45px, 14vh, 75px) !important;
+    height: auto !important;
+
+    max-width: 75px !important;
   }
 }
