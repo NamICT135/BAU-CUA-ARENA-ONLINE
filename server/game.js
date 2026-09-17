@@ -2,7 +2,9 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 
 const CAPACITY = 20;
 const MUTATIONS = new Set(['round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset',
-  'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result']);
+  'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result',
+  'host:betting-duration']);
+const BETTING_DURATION_SECONDS = new Set([15, 30, 45, 60]);
 const MAX_AMOUNT = 1_000_000_000;
 const MAX_BALANCE = 1_000_000_000_000;
 
@@ -101,7 +103,7 @@ export class GameService {
     return {
       code: room.code, gameId: room.gameId, capacity: CAPACITY, phase: room.phase, hostId: room.hostId,
       roundNumber: room.roundNumber, roundId: room.roundId, revision: room.revision,
-      serverNow: Date.now(), deadline: room.deadline, paused: room.paused,
+      serverNow: Date.now(), deadline: room.deadline, paused: room.paused, bettingMs: room.bettingMs,
       locked: room.locked, remainingMs: room.remainingMs,
       ...(player.id === room.hostId ? { admin: { forcedDice: room.forcedDice ? [...room.forcedDice] : null } } : {}),
       players: [...room.players.values()].map(entry => ({
@@ -201,6 +203,7 @@ export class GameService {
       roundNumber: 0, roundId: null, revision: 0, dice: [], history: [],
       revealTimer: null, hostTimer: null, updatedAt: Date.now(),
       phaseTimer: null, deadline: null, remainingMs: null, paused: false, locked: false,
+      bettingMs: this.bettingMs,
       forcedDice: null, demoRound: false,
     };
     this.rooms.set(code, room);
@@ -395,7 +398,7 @@ export class GameService {
       entry.eligible = entry.connected;
       entry.requests.clear();
     }
-    if (this.autoStart) this.schedulePhase(room, this.bettingMs);
+    if (this.autoStart) this.schedulePhase(room, room.bettingMs);
   }
 
   shake(room) {
@@ -422,7 +425,14 @@ export class GameService {
       if (room.paused === payload.paused) return;
       const remaining = room.deadline ? Math.max(0, room.deadline - Date.now()) : room.remainingMs;
       room.paused = payload.paused;
-      if (['betting', 'result'].includes(room.phase)) this.schedulePhase(room, remaining ?? this.bettingMs);
+      const fallbackDuration = room.phase === 'betting' ? room.bettingMs : this.resultMs;
+      if (['betting', 'result'].includes(room.phase)) this.schedulePhase(room, remaining ?? fallbackDuration);
+      return;
+    }
+    if (event === 'host:betting-duration') {
+      requireCondition(Number.isSafeInteger(payload.durationSeconds) && BETTING_DURATION_SECONDS.has(payload.durationSeconds),
+        'INVALID_DURATION', 'Thời gian cược phải là 15, 30, 45 hoặc 60 giây.');
+      room.bettingMs = payload.durationSeconds * 1000;
       return;
     }
     if (event === 'host:result') {

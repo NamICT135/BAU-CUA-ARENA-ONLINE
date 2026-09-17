@@ -8,12 +8,14 @@ import { GameService } from './game.js';
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const events = ['room:create', 'room:join', 'room:resume', 'room:sync', 'room:leave',
   'round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset',
-  'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result'];
+  'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result',
+  'host:betting-duration'];
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
-  '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json',
+  '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg',
+  '.webmanifest': 'application/manifest+json',
 };
 
 export function sendJson(res, status, body) {

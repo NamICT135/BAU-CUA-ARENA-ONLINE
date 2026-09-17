@@ -77,7 +77,7 @@ test('deadline is enforced before timer callback; stale admin commands cannot ch
 test('host authorization, grants with dedupe, locked joins, kick revokes session, transfer revokes old host', t => {
   const kicked = [];
   const { game, room, joined, cmd } = setup(t, { onKick: id => kicked.push(id) });
-  for (const event of ['host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:result', 'host:cancel', 'host:transfer']) {
+  for (const event of ['host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:result', 'host:cancel', 'host:transfer', 'host:betting-duration']) {
     assert.equal(cmd(event, {}, 'guest').error.code, 'HOST_ONLY');
   }
   const grant = { playerId: joined.session.playerId, amount: 125, requestId: 'grant-once' };
@@ -98,6 +98,21 @@ test('host authorization, grants with dedupe, locked joins, kick revokes session
   cmd('host:transfer', { playerId: next.session.playerId });
   assert.equal(cmd('host:lock', { locked: true }).error.code, 'HOST_ONLY');
   assert.equal(cmd('host:lock', { locked: true }, 'new').ok, true);
+});
+
+test('host sets the betting duration for following rounds only', t => {
+  const { game, room, cmd } = setup(t);
+  const currentDeadline = room.deadline;
+  assert.equal(cmd('host:betting-duration', { durationSeconds: 15 }).ok, true);
+  assert.equal(room.bettingMs, 15_000);
+  assert.equal(room.deadline, currentDeadline);
+  assert.equal(game.handle('guest', 'room:sync', {}).state.bettingMs, 15_000);
+  for (const durationSeconds of [5, 31, 60.5, '30']) {
+    assert.equal(cmd('host:betting-duration', { durationSeconds }).error.code, 'INVALID_DURATION');
+  }
+  assert.equal(cmd('host:cancel').ok, true);
+  assert.ok(room.deadline - Date.now() > 14_000);
+  assert.ok(room.deadline - Date.now() <= 15_000);
 });
 
 test('demo is per round, private selection only goes to host, cancel releases bets', async t => {

@@ -1,263 +1,1728 @@
-/* Reference-inspired lacquer, brass, porcelain and green felt. */
-.in-room {
-  --paper: #231713;
-  --line: #76552b;
-  --muted: #cfbda0;
-  --red: #a92f27;
-  --red-dark: #771a17;
+/* ===================================================================
+   BẦU CUA HOÀNG GIA — GIAO DIỆN CHUẨN 16:9 & MOBILE LANDSCAPE
+   =================================================================== */
+
+:root {
   --gold: #f5ce75;
-  --green: #9ce5b5;
-  --focus: #ffe29b;
-  color: #ffefd0;
-  background: radial-gradient(ellipse at 50% 0, #9e211f55, transparent 65%), #190907;
+  --gold-light: #fff2b2;
+  --gold-dark: #a87e31;
+  --red: #c52922;
+  --red-dark: #7a1511;
+  --green-felt: #0b5c46;
+  --panel-bg: rgba(28, 16, 12, 0.94);
+  --border-gold: #c99b4a;
 }
-.in-room .page-width { max-width: 1580px; width: calc(100% - 40px); }
-.in-room .site-header { background: #160d0bea; border-color: #8b5c2e; }
-.in-room .main-nav { min-height: 52px; padding: 4px 0; }
-.in-room .brand { color: #ffe0a1; }
-.in-room .brand strong, .in-room .brand-mark { color: #e8b95f; }
-.in-room .connection-status.connected { color: #a1e6ac; }
-.in-room .rules-link { color: #f5d493; }
-.in-room .arena { padding-top: 20px; }
-.in-room .room-header { position: relative; min-height: 86px; margin-bottom: 10px; gap: 18px; }
-.in-room .room-header h1 { font-family: Georgia, serif; font-size: 24px; }
-.in-room #room-code { color: #f6d07a; }
-.in-room .room-subtitle { color: #d9c6aa; }
-.in-room .eyebrow { color: #efc776; }
-.arena-wordmark { text-align: center; }
-.arena-wordmark > span { display: block; font: italic bold clamp(38px, 4vw, 65px)/1 Georgia, 'Times New Roman', serif; color: #ffdf91; text-shadow: 0 3px #641d09, 0 5px 0 #1f0c03, 0 0 25px #b86a3355; }
-.arena-wordmark small { display: block; margin-top: 8px; padding: 5px 18px; color: #f7d994; background: #082f2b; border: 1px solid #b98c48; border-radius: 30px; font-family: Georgia, serif; font-size: 11px; letter-spacing: 1.8px; }
-.in-room .room-notice { margin: 12px 0 18px; padding: 8px 16px; color: #ecd6b5; border-color: #856432; background: #2a1917; font-size: 12px; text-align: center; }
-.in-room .arena-layout { display: grid; grid-template-columns: minmax(175px, .8fr) minmax(0, 3fr) minmax(205px, 1fr); grid-template-areas: 'players table history'; align-items: start; gap: 18px; }
-.in-room .play-column { grid-area: table; min-width: 0; }
-.in-room .room-sidebar { grid-area: players; display: block; min-width: 0; }
-.in-room .history-section { grid-area: history; min-width: 0; margin: 0; }
-.in-room .panel, .in-room .result-panel, .in-room .stat-card { border: 1px solid #a77b3d; border-radius: 18px; background: linear-gradient(140deg, #382019, #1b1411 65%); box-shadow: inset 0 0 0 3px #22120d, inset 0 0 0 4px #71502d, 0 8px 28px #0003; }
-.in-room .panel { padding: 19px 14px; }
-.in-room .panel-heading { padding-bottom: 12px; border-bottom: 1px solid #79522a; gap: 8px; }
-.in-room .panel-heading h2 { font: bold 17px/1.3 Georgia, serif; color: #f6d491; }
-.in-room .count-badge { background: #130e0b; color: #ffd789; border: 1px solid #b18c4c; }
-.in-room .player-list { max-height: 380px; overflow-y: auto; scrollbar-color: #96703c #21140e; }
-.in-room .player-row { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 8px; padding: 13px 0; border-color: #624124; }
-.in-room .player-avatar { width: 38px; height: 38px; border: 2px solid #e3b563; background: radial-gradient(circle at 35% 25%, #ba7650, #411d18); color: #fff0c4; }
-.in-room .player-row.is-you .player-avatar { background: #0b5745; color: #ffe09c; }
-.in-room .player-name { color: #ffefcf; font-size: 13px; overflow-wrap: anywhere; }
-.in-room .player-detail { color: #c5b098; }
-.in-room .player-bet { grid-column: 2; margin-left: 0; color: #efd297; font-size: 11px; }
-.in-room .rank-balance { color: #f7d281; overflow-wrap: anywhere; }
-.in-room .rank-name { font-size: 12px; }
-.in-room .leaderboard li { border-color: #624124; flex-wrap: wrap; }
-.in-room .leaderboard-panel { margin-top: 18px; }
-.in-room .game-board { overflow: hidden; padding: 0 20px 20px; border: 3px solid #d7a455; border-radius: 26px; background: radial-gradient(ellipse at 50% 45%, #137050, #064b3b 55%, #032f29); box-shadow: 0 0 0 3px #4c2510, 0 0 0 5px #9b692f, inset 0 0 65px #002a24, 0 18px 45px #0005; }
-.in-room .board-toolbar { position: relative; z-index: 2; margin: 0 -20px; padding: 11px 18px; border-bottom: 1px solid #b9904e; background: linear-gradient(90deg, #35160d, #721e15, #35160d); }
-.in-room .board-toolbar h2 { font: bold 18px Georgia, serif; color: #ffe4a8; }
-.in-room .board-toolbar .eyebrow { margin-bottom: 4px; font-size: 9px; }
-.in-room .phase-badge { border-color: #cda05b; background: #1b3025; color: #fff0bc; font-size: 10px; }
-.in-room .phase-badge.revealing { background: #70231a; }
-.dealer-stage { position: relative; height: 238px; margin: 0 -20px; background: linear-gradient(0deg, #044a3b 0%, transparent 35%), url('/assets/arena/scene.png') center top / cover; }
-.dealer-stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 -20px 30px #034636; }
-.in-room .round-clock { position: absolute; top: 80px; left: 14px; z-index: 1; width: 150px; margin: 0; padding: 11px 10px; display: flex; flex-direction: column; gap: 6px; color: #fbe49d; background: #1b160fee; border: 1px solid #ddaf5c; border-radius: 12px; box-shadow: inset 0 0 0 3px #513218, 0 6px 20px #0005; }
-.in-room #countdown-label { font: bold 10px Georgia, serif; text-transform: uppercase; text-align: center; }
-.in-room #round-countdown { font: bold 34px/1 Georgia, serif; font-variant-numeric: tabular-nums; }
-.clock-track { display: block; width: 100%; height: 5px; border-radius: 5px; overflow: hidden; background: #50422c; }
-#clock-progress { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #b87822, #ffe092); transition: width 250ms linear; }
-.in-room .dice-area { position: absolute; z-index: 1; top: 80px; right: 14px; width: 152px; margin: 0; padding: 10px 7px; background: #1c160fee; border: 1px solid #d8a858; border-radius: 12px; }
-.in-room .dice-row { gap: 5px; }
-.in-room .dice-slot { width: 36px; height: 38px; border-radius: 7px; font-size: 24px; color: #e6cb87; background-color: #291b11; border-color: #8d652e; border-bottom-width: 2px; }
-.in-room #dice-caption { font-size: 10px; color: #e8cfac; line-height: 1.4; margin-top: 6px; }
-.in-room #view-bowl { color: #ffe2a0; font-size: 11px; justify-content: center; min-height: 32px; padding: 3px; }
-.table-motto { position: absolute; z-index: 1; bottom: 7px; left: 0; right: 0; text-align: center; font: 10px Georgia, serif; letter-spacing: 2px; color: #f8d58e; }
-.table-motto span { margin: 0 12px; }
-.in-room .wallet-row { margin: 10px 0 15px; padding: 10px 14px; border: 1px solid #6d8a52; border-radius: 12px; background: #063529; }
-.in-room .wallet-row p { color: #d5d9ac; font-size: 10px; }
-.in-room .wallet-row strong { font: bold 25px/1.3 Georgia, serif; color: #ffe397; }
-.in-room small { color: #c8bda2; }
-.in-room .symbol-controls legend { text-align: center; width: 100%; color: #efcf8b; font-size: 10px; }
-.in-room .symbol-controls legend span { display: inline; margin-left: 10px; color: #d3debf; font-size: 10px; letter-spacing: 0; }
-.in-room .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.in-room .symbol-card { position: relative; display: grid; justify-items: center; gap: 3px; min-height: 0; padding: 7px 7px 9px; border: 2px solid #d0a758; border-radius: 18px; background: linear-gradient(145deg, #12644b, #01382d); color: #ffdc8b; box-shadow: inset 0 0 0 2px #233c22, 0 5px 0 #012b23; }
-.in-room .symbol-card:hover:not(:disabled) { border-color: #ffe8a7; background: #1a7652; transform: translateY(-2px); }
-.in-room .symbol-card:active:not(:disabled) { transform: translateY(2px); }
-.in-room .symbol-card.has-bet { padding: 7px 7px 9px; border-color: #ffe8a7; box-shadow: 0 0 0 2px #eab652, inset 0 0 18px #d4c33b44; }
-.in-room .symbol-card.is-result { box-shadow: 0 0 0 2px #ffe098, 0 0 22px #edc65170; }
-.in-room .symbol-name { grid-row: 2; min-width: 66%; padding: 1px 12px; margin-top: -7px; z-index: 1; border: 1px solid #c79642; border-radius: 10px 10px 5px 5px; font: bold 16px/1.5 Georgia, serif; color: #ffe09b; background: linear-gradient(#8c201a, #4d100d); }
-.dice-art { display: inline-block; background-image: url('/assets/arena/dice-sheet.png'); background-size: 300% 200%; background-repeat: no-repeat; aspect-ratio: 1; }
-.art-nai { background-position: 0% 0%; }
-.art-bau { background-position: 50% 0%; }
-.art-ga { background-position: 100% 0%; }
-.art-ca { background-position: 0% 100%; }
-.art-cua { background-position: 50% 100%; }
-.art-tom { background-position: 100% 100%; }
-.in-room .symbol-icon { grid-row: 1; width: min(100%, 155px); height: auto; border-radius: 15px; background-color: #522011; mask-image: radial-gradient(ellipse at 50% 50%, #000 57%, #000b 64%, transparent 74%); }
-.in-room .bet-label { padding: 1px 3px; color: #f7e6bc; background: transparent; font-size: 11px; }
-.in-room .bet-value { color: #fff0ba; font-weight: 800; }
-.in-room .board-total { color: #b9d7bd; font-size: 10px; }
-.in-room .chip-selector { margin-top: 23px; padding-top: 12px; border-top: 1px solid #668958; }
-.in-room .chip-selector legend { color: #e8d29e; }
-.in-room .chip-controls { justify-content: center; gap: 14px; }
-.in-room .chip-button { --chip-color: #126d4c; min-width: 58px; min-height: 58px; padding: 5px; border: 6px dashed #ecdbb5; border-radius: 50%; color: #123c2e; font-weight: 850; background: radial-gradient(circle, #fff0ca 50%, var(--chip-color) 53%); box-shadow: 0 0 0 2px var(--chip-color), 0 4px 0 #012f27; }
-.in-room .chip-button:nth-child(2) { --chip-color: #2555a0; }
-.in-room .chip-button:nth-child(3) { --chip-color: #a32627; }
-.in-room .chip-button:nth-child(4) { --chip-color: #68398d; }
-.in-room .chip-button.selected { padding: 5px; border-width: 6px; background: radial-gradient(circle, #fff6d7 50%, var(--chip-color) 53%); color: #482510; outline: 2px solid #ffdc6e; outline-offset: 4px; transform: translateY(-3px); box-shadow: 0 0 22px #f6cb6955; }
-.in-room .chip-button.selected::before { content: none; }
-.in-room .custom-chip-row { gap: 10px; margin-top: 18px; align-items: end; }
-.in-room #all-in { border: 2px solid #d5ae62; min-height: 44px; min-width: 75px; border-radius: 9px; padding: 8px; color: #ffe9a9; background: #5e1e16; box-shadow: none; font-size: 12px; }
-.in-room .custom-chip-row label { color: #d6dcc5; font-size: 11px; }
-.in-room input:not([type=range]), .in-room select { color: #ffebbd; background: #1b241a; border-color: #a48b53; }
-.in-room input::placeholder { color: #c5bd9f; }
-.in-room .button { min-height: 44px; border-radius: 10px; }
-.in-room .button-primary { color: #fff0c3; background: linear-gradient(#b93523, #661510); border: 1px solid #e1b96c; box-shadow: inset 0 0 0 2px #791d15, 0 3px 0 #3d150c; }
-.in-room .button-primary:hover:not(:disabled) { background: #a52b20; }
-.in-room .button-secondary { color: #f9dfaa; background: linear-gradient(#463321, #24170e); border: 1px solid #b28c4e; }
-.in-room .button-secondary:hover:not(:disabled) { background: #5e4124; border-color: #f4cd7a; }
-.in-room .text-button { color: #eacb8d; }
-.in-room .field-hint { color: #cbb99d; }
-.in-room #selected-chip-label { margin-top: 14px; text-align: center; color: #e1d4ac; font-size: 11px; }
-.in-room .game-actions { border-color: #6f8a55; margin-top: 14px; padding-top: 12px; }
-.in-room .total-bet { color: #c7d8ba; }
-.in-room .total-bet strong { color: #ffe1a1; }
-.in-room .host-controls { margin: 16px -20px -20px; padding: 14px 20px; background: #082d25; border-top: 1px solid #a08043; }
-.in-room .host-controls p span { color: #c9c8a9; }
-.in-room .host-controls .button { font-size: 12px; }
-.in-room .result-panel { margin-top: 18px; padding: 18px 22px; }
-.in-room .result-panel h2 { font: bold 21px Georgia, serif; color: #ffdd91; }
-.in-room .muted, .in-room .result-summary dt { color: #d3c1a4; }
-.in-room .result-summary { margin-top: 14px; }
-.in-room .result-summary dd { font-size: 24px; color: #fff1cc; }
-.in-room .positive { color: #a5e7ac; }
-.in-room .negative { color: #ffb7a9; }
-.in-room .history-section .section-heading { margin: 0 0 13px; display: block; }
-.in-room .history-section .section-heading h2 { font: bold 20px Georgia, serif; color: #fce0a0; }
-.in-room .history-section .section-heading .eyebrow { display: none; }
-.in-room .history-section .section-heading > span { font-size: 10px; }
-.in-room .history-section .panel { padding: 10px 13px; }
-.in-room .history-list { max-height: 750px; overflow-y: auto; scrollbar-color: #98723c #25160f; }
-.in-room .history-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 13px 0; border-color: #785529; }
-.in-room .history-round { width: 100%; font-size: 10px; color: #dec99c; }
-.in-room .history-dice { display: flex; gap: 5px; width: 100%; justify-content: center; }
-.in-room .history-dice .dice-art { width: 32%; max-width: 62px; border-radius: 11px; border: 1px solid #b69150; }
-.in-room .history-outcome { width: 100%; text-align: center; font-size: 12px; }
-.in-room .history-outcome small { display: block; font-size: 10px; }
-.in-room .history-empty { color: #c4b090; font-size: 12px; }
-.in-room .host-panel { margin: 28px 0; padding: 24px; }
-.in-room .host-panel h2 { color: #f8d997; }
-.in-room .host-panel fieldset { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 24px; }
-.in-room .host-panel legend { margin-top: 20px; }
-.in-room .host-panel .admin-actions, .in-room .host-panel .demo-controls { grid-column: 1 / -1; }
-.in-room .host-panel label { grid-column: 1; align-self: center; }
-.in-room .host-panel .demo-dice label { grid-column: auto; }
-.in-room .demo-controls { border-color: #805a34; }
-.in-room .statistics-section { margin-top: 30px; }
-.in-room .section-heading h2 { color: #f7d899; }
-.in-room .stat-card dd { color: #ffde97; }
-.in-room .stat-card dt { color: #d1bfa4; }
-.in-room .rules-section { background: #291a13; border: 1px solid #72502d; }
-.in-room .rules-list, .in-room .rule-example, .in-room .education-note { color: #dbc8a6; }
-.in-room .rule-example { background: #38251a; }
-.in-room .site-footer { border-color: #78572d; background: #130b08; color: #ddc394; }
-.in-room button:focus-visible, .in-room a:focus-visible, .in-room input:focus-visible, .in-room select:focus-visible, .in-room summary:focus-visible { outline: 3px solid #ffe4a1; outline-offset: 4px; }
-.in-room button:disabled { opacity: .55; }
-.in-room .symbol-controls:disabled .symbol-card { opacity: .8; }
 
-/* A native modal keeps keyboard focus inside the reveal, with an Escape exit. */
-.bowl-dialog { width: min(670px, calc(100vw - 28px)); max-width: 670px; max-height: calc(100dvh - 28px); padding: 22px 30px 20px; overflow: auto; color: #fff1c9; border: 2px solid #d5aa5c; border-radius: 24px; background: radial-gradient(ellipse at 50% 45%, #754020, #271710 64%, #180e0b); box-shadow: inset 0 0 0 4px #342015, 0 25px 100px #000c; text-align: center; }
-.bowl-dialog::backdrop { background: #090402db; backdrop-filter: blur(7px); }
-.bowl-modal-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.bowl-modal-heading .eyebrow { margin: 0; color: #e1bf76; }
-.bowl-close { border: 1px solid #9b743c; border-radius: 50%; min-width: 44px; height: 44px; background: #2c190f; color: #ffe6af; font-size: 26px; line-height: 1; }
-.bowl-dialog h2 { font: bold clamp(23px, 4vw, 34px)/1.3 Georgia, serif; margin-top: 4px; color: #ffdfa0; }
-#bowl-instructions { color: #d8c5a3; font-size: 13px; margin: 9px auto 0; max-width: 450px; }
-.bowl-stage { --lift: 0; position: relative; height: clamp(220px, 44vw, 350px); margin: 6px auto 0; width: 100%; isolation: isolate; }
-.bowl-plate { position: absolute; left: 6%; right: 6%; bottom: 9%; height: 41%; border-radius: 50%; background: radial-gradient(ellipse, #813320 0%, #542519 52%, #9d601f 53%, #ffe3a1 58%, #a96928 61%, #f9d384 64%, #643513 67%); box-shadow: 0 18px 22px #0007, 0 0 40px #d98b3233; }
-.bowl-dice { position: absolute; left: 16%; right: 16%; bottom: 16%; display: flex; justify-content: center; gap: 5px; transform: rotate(-3deg); }
-.bowl-dice .dice-art { width: 32%; border-radius: 22%; box-shadow: 0 6px 8px #0006; }
-.bowl-lid { position: absolute; z-index: 2; inset: auto 6% 5%; aspect-ratio: 3 / 2; transform: translateY(calc(var(--lift) * -58%)) rotate(calc(var(--lift) * -8deg)); opacity: calc(1 - var(--lift) * .85); will-change: transform; touch-action: none; user-select: none; cursor: grab; }
-.bowl-lid:active { cursor: grabbing; }
-.bowl-lid img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-.bowl-stage[data-state=shaking] .bowl-lid { animation: shake-bowl 180ms ease-in-out infinite alternate; cursor: wait; }
-@keyframes shake-bowl { 0% { transform: translate(-9px, -3px) rotate(-3deg); } 100% { transform: translate(9px, 3px) rotate(3deg); } }
-.bowl-reveal-controls { position: relative; z-index: 3; margin: 0 auto; max-width: 430px; }
-.bowl-reveal-controls label { display: flex; justify-content: space-between; font-size: 13px; color: #eed6a7; }
-#bowl-lift { display: block; width: 100%; height: 44px; padding: 0; margin: 4px 0 8px; accent-color: #e3af55; cursor: ew-resize; }
-.bowl-modal-actions { display: flex; justify-content: center; gap: 10px; }
-.bowl-modal-actions .button { min-width: 150px; }
-#bowl-outcome { min-height: 26px; margin-top: 12px; color: #ffe5a5; font-weight: 700; }
-.bowl-next { color: #c5af8c; font-size: 11px; margin-top: 5px; }
-.bowl-dialog [hidden] { display: none; }
+*, *::before, *::after {
+  box-sizing: border-box;
+}
 
-@media (min-width: 1500px) { .dealer-stage { height: 270px; } .in-room .symbol-icon { width: 170px; } }
-@media (max-width: 1100px) {
-  .in-room .arena-layout { grid-template-columns: minmax(150px, .7fr) minmax(0, 2.7fr); grid-template-areas: 'players table' 'history table'; }
-  .in-room .history-list { max-height: 420px; }
-  .in-room .room-header { flex-wrap: wrap; }
-  .in-room .room-header > div:first-child { min-width: 170px; }
-  .arena-wordmark > span { font-size: 48px; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #090302;
+  font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  color: #ffeed0;
 }
-@media (max-width: 760px) {
-  .in-room .page-width { width: calc(100% - 24px); }
-  .in-room .room-header { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .arena-wordmark { grid-row: 1; grid-column: 1 / -1; }
-  .arena-wordmark > span { font-size: 48px; }
-  .arena-wordmark small { display: inline-block; font-size: 9px; }
-  .in-room .room-header h1 { font-size: 20px; }
-  .in-room .room-header .eyebrow { font-size: 8px; }
-  .in-room .room-tools { justify-content: end; width: auto; gap: 5px; flex-wrap: wrap; }
-  .in-room .room-tools .button { padding: 7px 9px; font-size: 10px; }
-  .in-room .arena-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'table' 'players' 'history'; gap: 22px; }
-  .in-room .room-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .in-room .leaderboard-panel { margin: 0; }
-  .in-room .player-list { max-height: 240px; }
-  .in-room .history-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; max-height: 350px; }
-  .in-room .history-outcome { display: block; }
-  .in-room .symbol-icon { width: 150px; }
-  .in-room .host-panel { padding: 19px; }
+
+/* ===================================================================
+   1. MÀN HÌNH NHẮC XOAY NGANG (MOBILE LANDSCAPE PROMPT)
+   =================================================================== */
+.rotate-prompt {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: radial-gradient(circle at 50% 50%, #2e0d08 0%, #0f0403 80%, #000 100%);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
 }
-@media (max-width: 480px) {
-  .in-room .game-board { padding: 0 10px 14px; border-radius: 20px; }
-  .in-room .board-toolbar { margin: 0 -10px; padding: 10px 12px; }
-  .in-room .board-toolbar h2 { font-size: 16px; }
-  .dealer-stage { height: 185px; margin: 0 -10px; }
-  .in-room .round-clock { width: 95px; top: 65px; left: 7px; padding: 8px 6px; }
-  .in-room #countdown-label { font-size: 8px; }
-  .in-room #round-countdown { font-size: 29px; }
-  .in-room .dice-area { width: 100px; top: 65px; right: 7px; padding: 7px 4px; }
-  .in-room .dice-slot { width: 25px; height: 28px; font-size: 17px; }
-  .in-room .dice-row { gap: 3px; }
-  .in-room #dice-caption { font-size: 8px; }
-  .in-room #view-bowl { font-size: 9px; }
-  .table-motto { font-size: 8px; letter-spacing: .8px; }
-  .in-room .wallet-row { margin-top: 7px; padding: 8px 10px; }
-  .in-room .wallet-row strong { font-size: 22px; }
-  .in-room .game-grid { gap: 7px; }
-  .in-room .symbol-card, .in-room .symbol-card.has-bet { padding: 4px 2px 7px; gap: 1px; border-radius: 13px; }
-  .in-room .symbol-icon { width: 100%; }
-  .in-room .symbol-name { font-size: 13px; padding: 0 8px; margin-top: -3px; }
-  .in-room .bet-label { font-size: 10px; }
-  .in-room .board-total { font-size: 8px; }
-  .in-room .symbol-controls legend { font-size: 9px; }
-  .in-room .symbol-controls legend span { display: block; margin-left: 0; }
-  .in-room .chip-controls { gap: 15px; }
-  .in-room .chip-button { min-width: 48px; min-height: 48px; font-size: 12px; border-width: 5px; }
-  .in-room .chip-button.selected { border-width: 5px; }
-  .in-room .custom-chip-row { align-items: center; }
-  .in-room .custom-chip-row .button { width: 100%; font-size: 12px; }
-  .in-room .custom-chip-row label { min-width: 0; }
-  .in-room .host-controls { margin: 16px -10px -14px; padding: 12px; }
-  .in-room .room-sidebar { grid-template-columns: minmax(0, 1fr); }
-  .in-room .host-panel fieldset { display: block; }
-  .in-room .host-panel .demo-dice { gap: 6px; }
-  .in-room .result-summary dd { font-size: 20px; }
-  .bowl-dialog { padding: 12px 14px 18px; border-radius: 18px; }
-  .bowl-stage { height: 235px; }
-  .bowl-lid { inset: auto 0 5%; }
-  .bowl-dialog h2 { font-size: 24px; }
-  #bowl-instructions { font-size: 12px; }
-  .bowl-dice { left: 12%; right: 12%; }
-  .bowl-plate { left: 1%; right: 1%; }
+
+@media (orientation: portrait) and (max-width: 950px) {
+  .rotate-prompt {
+    display: flex;
+  }
 }
+
+.rotate-card {
+  max-width: 380px;
+  background: rgba(36, 18, 14, 0.92);
+  border: 2px solid var(--border-gold);
+  border-radius: 20px;
+  padding: 32px 24px;
+  box-shadow: 0 0 50px rgba(220, 160, 50, 0.3), inset 0 0 20px rgba(0, 0, 0, 0.7);
+}
+
+.phone-rotate-anim {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+}
+
+.phone-body {
+  width: 36px;
+  height: 64px;
+  margin: 8px auto;
+  border: 3px solid #ffde8a;
+  border-radius: 8px;
+  background: rgba(255, 222, 138, 0.15);
+  animation: rotatePhone 2.2s ease-in-out infinite alternate;
+}
+
+@keyframes rotatePhone {
+  0%, 30% { transform: rotate(0deg); }
+  70%, 100% { transform: rotate(-90deg); }
+}
+
+.rotate-arrow {
+  position: absolute;
+  top: -5px;
+  right: 5px;
+  font-size: 32px;
+  color: #ffcb52;
+  animation: pulseRotate 1.5s infinite;
+}
+
+@keyframes pulseRotate {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.rotate-card h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  color: #ffd875;
+  margin: 0 0 10px;
+  letter-spacing: 1px;
+}
+
+.rotate-card p {
+  font-size: 13px;
+  color: #e5cdb0;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.btn-rotate-fs {
+  background: linear-gradient(180deg, #d89f38 0%, #946219 100%);
+  color: #1a0802;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px 24px;
+  border: 1px solid #ffe391;
+  border-radius: 30px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+/* ===================================================================
+   2. KHUNG CHÍNH CHUẨN TỈ LỆ 16:9
+   =================================================================== */
+.arcade-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 50%, #200806 0%, #0c0403 70%, #000 100%);
+  overflow: hidden;
+}
+
+.arcade-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  max-width: 100vw;
+  max-height: 100vh;
+  background: url('/assets/arena/background-complete.png') center center / 100% 100% no-repeat;
+  box-shadow: 0 0 70px rgba(0,0,0,0.95), 0 0 140px rgba(185, 30, 20, 0.25);
+  overflow: hidden;
+}
+
+/* ===================================================================
+   3. SẢNH CHỜ (LOBBY OVERLAY)
+   =================================================================== */
+.lobby-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(12, 4, 3, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lobby-box {
+  width: min(90%, 460px);
+  background: linear-gradient(145deg, rgba(42, 21, 16, 0.96), rgba(20, 10, 8, 0.98));
+  border: 2px solid var(--border-gold);
+  border-radius: 24px;
+  padding: 24px 30px;
+  text-align: center;
+  box-shadow: 0 0 50px rgba(225, 165, 50, 0.25), inset 0 0 30px rgba(0, 0, 0, 0.8);
+}
+
+.lobby-logo {
+  max-width: 260px;
+  height: auto;
+  filter: drop-shadow(0 4px 14px rgba(255, 200, 80, 0.4));
+}
+
+.lobby-tagline {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #ffda82;
+  margin: 4px 0 16px;
+}
+
+.input-group {
+  text-align: left;
+  margin-bottom: 12px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #f7d490;
+  margin-bottom: 5px;
+}
+
+.input-group input, .join-row input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  background: rgba(10, 4, 3, 0.8);
+  border: 1px solid #946931;
+  border-radius: 10px;
+  color: #fff1d0;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+
+.input-group input:focus, .join-row input:focus {
+  border-color: #ffd875;
+  box-shadow: 0 0 10px rgba(255, 216, 117, 0.3);
+}
+
+.btn-gold-primary {
+  width: 100%;
+  height: 44px;
+  background: linear-gradient(180deg, #f7d277 0%, #c48b29 50%, #915e13 100%);
+  border: 1px solid #ffe9ad;
+  border-radius: 12px;
+  color: #2b1103;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.1s, filter 0.1s;
+}
+
+.btn-gold-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.btn-gold-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-gold-primary:disabled, .btn-gold-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+.lobby-or {
+  position: relative;
+  margin: 16px 0;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #a88d71;
+}
+
+.lobby-or::before, .lobby-or::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 25%;
+  height: 1px;
+  background: #573a21;
+}
+
+.lobby-or::before { left: 0; }
+.lobby-or::after { right: 0; }
+
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.join-row input {
+  flex: 1;
+  text-transform: uppercase;
+}
+
+.btn-gold-secondary {
+  height: 42px;
+  padding: 0 18px;
+  background: linear-gradient(180deg, #44241c 0%, #20100c 100%);
+  border: 1px solid #946931;
+  border-radius: 10px;
+  color: #ffdf9e;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-gold-secondary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #592e24 0%, #2c1611 100%);
+  border-color: #d19a47;
+}
+
+.lobby-notice {
+  margin-top: 14px;
+  font-size: 11px;
+  color: #ffcf78;
+}
+
+.lobby-badges {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 10px;
+  color: #bfa78a;
+}
+
+/* ===================================================================
+   4. GIAO DIỆN TRONG GAME (GAME ARENA)
+   =================================================================== */
+.game-arena {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 4.1. HEADER TRÊN CÙNG */
+.top-header {
+  position: absolute;
+  top: 1%;
+  left: 1.2%;
+  right: 1.2%;
+  height: 11%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.top-header > * {
+  pointer-events: auto;
+}
+
+/* Profile người chơi (Góc trái) */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(22, 10, 8, 0.85);
+  border: 1px solid #966c32;
+  border-radius: 40px;
+  padding: 4px 14px 4px 5px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+}
+
+.profile-avatar-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.vip-crown {
+  position: absolute;
+  top: -10px;
+  left: -4px;
+  font-size: 16px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+  z-index: 2;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #ffd46d;
+  background: radial-gradient(circle at 35% 30%, #a43a28, #3b110a);
+  object-fit: cover;
+}
+
+.vip-badge-pill {
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #d32f2f 0%, #7b1111 100%);
+  border: 1px solid #ffdd80;
+  border-radius: 8px;
+  padding: 0 4px;
+  font-size: 8px;
+  font-weight: 800;
+  color: #fff3c4;
+  white-space: nowrap;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff0cf;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-code-badge {
+  background: #381b14;
+  border: 1px solid #7c5324;
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 9px;
+  color: #ffdb89;
+  font-weight: 700;
+}
+
+.balance-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #110705;
+  border: 1px solid #8e652a;
+  border-radius: 20px;
+  padding: 1px 4px 1px 7px;
+}
+
+.coin-icon {
+  font-size: 11px;
+}
+
+.balance-value {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffdf79;
+  font-family: 'Cinzel', serif;
+}
+
+.btn-add-coin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.btn-add-coin img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Logo Bầu Cua Vàng Kim (Ở giữa) */
+.brand-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -6px;
+}
+
+.brand-logo {
+  height: clamp(52px, 8.5vh, 80px);
+  width: auto;
+  filter: drop-shadow(0 4px 16px rgba(255, 180, 40, 0.45));
+}
+
+/* Cụm nút công cụ (Góc phải) */
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.circle-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.65));
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.circle-btn:hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 8px rgba(255, 217, 112, 0.5));
+}
+
+.circle-btn:active {
+  transform: scale(0.95);
+}
+
+.circle-btn img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* ===================================================================
+   4.2. CỘT TRÁI: NGƯỜI CHƠI & BẢNG VIP
+   =================================================================== */
+.left-sidebar {
+  position: absolute;
+  top: 13.8%;
+  left: 0.6%;
+  width: 15%;
+  height: 70.8%;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(208, 156, 73, 0.7);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(36, 16, 12, 0.88), rgba(17, 7, 5, 0.82));
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(4px);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid #724c25;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f7d591;
+}
+
+.sh-title, .sh-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sh-badge {
+  background: #110705;
+  border: 1px solid #946931;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 9px;
+  color: #ffdb89;
+}
+
+.vip-players-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #8b622c transparent;
+}
+
+.vip-player-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: rgba(30, 14, 10, 0.4);
+  border: 1px solid rgba(130, 90, 45, 0.25);
+}
+
+.vip-player-row.is-me {
+  background: rgba(56, 26, 18, 0.7);
+  border-color: #c99b4a;
+}
+
+.vip-player-avatar-wrap {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.vip-crown-mini {
+  position: absolute;
+  top: -7px;
+  left: -2px;
+  font-size: 11px;
+}
+
+.vip-player-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1.5px solid #d8a649;
+  object-fit: cover;
+  background: #3d1b13;
+}
+
+.vip-player-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vip-level-tag {
+  align-self: flex-start;
+  font-size: 7.5px;
+  font-weight: 800;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #992318, #5a110a);
+  color: #ffdf94;
+  border: 0.5px solid #dca752;
+}
+
+.vip-player-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffeed5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vip-player-coin {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffd86b;
+}
+
+/* ===================================================================
+   4.3. CỘT PHẢI: LỊCH SỬ PHIÊN (GRID 20 VIÊN TRÒN)
+   =================================================================== */
+.right-sidebar {
+  position: absolute;
+  top: 13.8%;
+  right: 0.6%;
+  width: 15%;
+  height: 70.8%;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(208, 156, 73, 0.7);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(36, 16, 12, 0.88), rgba(17, 7, 5, 0.82));
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(4px);
+}
+
+.history-grid-20 {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 4px;
+  padding: 8px 4px;
+  place-items: center;
+  overflow: hidden;
+}
+
+.history-token {
+  width: clamp(24px, 2.7vw, 34px);
+  height: clamp(24px, 2.7vw, 34px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e6dcd0 65%, #c5b4a0 100%);
+  border: 1.5px solid #dca74d;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2px;
+}
+
+.history-token img {
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+}
+
+.history-token.empty {
+  opacity: 0.72;
+  border-color: #8f6937;
+  background: radial-gradient(circle at 35% 30%, rgba(94, 61, 33, 0.72), rgba(25, 11, 8, 0.9));
+}
+
+.history-token.empty::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ba8a48;
+  box-shadow: 0 0 6px rgba(245, 206, 117, 0.4);
+}
+
+.stats-footer-btn {
+  height: 32px;
+  margin-top: 4px;
+  background: linear-gradient(180deg, #3a1e16 0%, #1c0e0a 100%);
+  border: 1px solid #9a6e35;
+  border-radius: 8px;
+  color: #ffdf94;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.stats-footer-btn > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stats-button-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.stats-footer-btn:hover {
+  background: linear-gradient(180deg, #4f281e 0%, #29140f 100%);
+  border-color: #d1994b;
+}
+
+/* ===================================================================
+   4.4. SÂN KHẤU TRUNG TÂM PHÍA TRÊN: BÁT SỨ PHÚC & 3 XÚC XẮC
+   =================================================================== */
+.center-stage-top {
+  position: absolute;
+  top: 13.5%;
+  left: 17%;
+  right: 17%;
+  height: 21.5%;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.center-stage-top > * {
+  pointer-events: auto;
+}
+
+/* Thẻ nổi đếm ngược & phiên */
+.floating-card {
+  width: 21.5%;
+  background: linear-gradient(145deg, rgba(30, 15, 11, 0.95), rgba(16, 7, 5, 0.98));
+  border: 1.5px solid #ab7a36;
+  border-radius: 12px;
+  padding: 6px 10px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.6), inset 0 0 10px rgba(0,0,0,0.8);
+}
+
+.floating-card .card-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #dfba7c;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.floating-card .digital-clock {
+  font-family: 'Cinzel', monospace;
+  font-size: clamp(20px, 2.5vw, 28px);
+  font-weight: 900;
+  color: #ffd868;
+  text-shadow: 0 0 10px rgba(255, 216, 104, 0.4);
+  line-height: 1;
+}
+
+.clock-track {
+  width: 100%;
+  height: 3px;
+  background: #382417;
+  border-radius: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+#clock-progress {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #d33c1f, #f7ce5f);
+  transition: width 250ms linear;
+}
+
+.floating-card .phase-text {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffe6a6;
+  white-space: nowrap;
+}
+
+.phase-dots {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.p-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f7ce5f;
+  animation: blinkDot 1.4s infinite alternate;
+}
+.p-dot:nth-child(2) { animation-delay: 0.3s; }
+.p-dot:nth-child(3) { animation-delay: 0.6s; }
+
+@keyframes blinkDot {
+  0% { opacity: 0.2; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1.3); }
+}
+
+/* Khu vực Bát Sứ & 3 Xúc Xắc */
+.bowl-pedestal-stage {
+  position: relative;
+  width: 48%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bowl-pedestal-stage.is-idle .stage-bowl-tray {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* 3 Xúc xắc đặt trên đĩa đỏ */
+.dice-trio {
+  position: absolute;
+  bottom: 5%;
+  display: flex;
+  gap: 7px;
+  z-index: 4;
+}
+
+.dice-3d-preview {
+  position: absolute;
+  bottom: 4%;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  width: clamp(100px, 12vw, 158px);
+  height: clamp(50px, 6.8vw, 88px);
+  filter: drop-shadow(0 7px 9px rgba(0, 0, 0, 0.68));
+  pointer-events: none;
+}
+
+.dice-3d-preview img {
+  width: 34%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.dice-3d-preview img:nth-child(1) { transform: rotate(-9deg) translateY(3px); }
+.dice-3d-preview img:nth-child(2) { transform: rotate(2deg) translateY(-3px); }
+.dice-3d-preview img:nth-child(3) { transform: rotate(10deg) translateY(4px); }
+
+.stage-bowl-tray {
+  position: absolute;
+  bottom: -24%;
+  z-index: 1;
+  width: clamp(135px, 17vw, 215px);
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 11px 14px rgba(0, 0, 0, 0.62));
+  transform: scaleY(0.66);
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+.die-slot {
+  width: clamp(34px, 3.8vw, 50px);
+  height: clamp(34px, 3.8vw, 50px);
+  border-radius: 10px;
+  background: radial-gradient(circle at 35% 30%, #fffef8 0%, #ece2d0 60%, #cdbeaa 100%);
+  border: 1.5px solid #dca74d;
+  box-shadow: 0 5px 12px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.9);
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  transform: rotate(0deg);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.die-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.die-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  box-shadow: none;
+}
+
+.die-face[data-symbol='nai'] { background-image: url('/assets/arena/die-nai.png'); }
+.die-face[data-symbol='bau'] { background-image: url('/assets/arena/die-bau.png'); }
+.die-face[data-symbol='ga'] { background-image: url('/assets/arena/die-ga.png'); }
+.die-face[data-symbol='ca'] { background-image: url('/assets/arena/die-ca.png'); }
+.die-face[data-symbol='cua'] { background-image: url('/assets/arena/die-cua.png'); }
+.die-face[data-symbol='tom'] { background-image: url('/assets/arena/die-tom.png'); }
+
+.dice-mark {
+  font-size: 20px;
+  font-weight: 900;
+  color: #8b622c;
+}
+
+/* Bát sứ Phúc đậy trên xúc xắc */
+.stage-bowl-lid {
+  position: absolute;
+  top: -20%;
+  width: clamp(118px, 15vw, 190px);
+  height: auto;
+  z-index: 10;
+  cursor: pointer;
+  filter: drop-shadow(0 10px 22px rgba(0,0,0,0.85));
+  transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.4s;
+  touch-action: pan-y;
+}
+
+.stage-bowl-lid img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Hiệu ứng rung lắc xúc xắc */
+.bowl-pedestal-stage.shaking .stage-bowl-lid {
+  animation: bowlVibrate 0.12s infinite alternate;
+}
+
+.bowl-pedestal-stage.shaking .dice-3d-preview {
+  animation: diceRattle 0.12s infinite alternate;
+}
+
+@keyframes bowlVibrate {
+  0% { transform: translate(-3px, -2px) rotate(-1.5deg); }
+  50% { transform: translate(3px, 2px) rotate(1.5deg); }
+  100% { transform: translate(-2px, 3px) rotate(-1deg); }
+}
+
+@keyframes diceRattle {
+  from { transform: translate(-4px, 1px) rotate(-1deg); }
+  to { transform: translate(4px, -2px) rotate(1deg); }
+}
+
+/* Khi mở bát tại chỗ */
+.stage-bowl-lid.opened {
+  transform: translateY(-90%) scale(0.9);
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+/* ===================================================================
+   4.5. BÀN CƯỢC 6 LINH VẬT TRÊN NỀN NỈ XANH
+   =================================================================== */
+.betting-board {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border: none;
+  padding: 0;
+  margin: 0;
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.betting-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.bet-spot {
+  position: absolute;
+  left: var(--spot-x);
+  top: var(--spot-y);
+  width: 14.5%;
+  height: 17.5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  transition: transform 0.12s, filter 0.12s;
+  overflow: visible;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.bet-spot:nth-child(1) { --spot-x: 35%; --spot-y: 53.5%; --chip-x: 53%; --chip-y: 57%; }
+.bet-spot:nth-child(2) { --spot-x: 50%; --spot-y: 53.5%; --chip-x: 50%; --chip-y: 56%; }
+.bet-spot:nth-child(3) { --spot-x: 65.5%; --spot-y: 53.5%; --chip-x: 50%; --chip-y: 54%; }
+.bet-spot:nth-child(4) { --spot-x: 33.6%; --spot-y: 70.6%; --chip-x: 47%; --chip-y: 44%; width: 15.5%; }
+.bet-spot:nth-child(5) { --spot-x: 50%; --spot-y: 70.6%; --chip-x: 50%; --chip-y: 48%; width: 15.5%; }
+.bet-spot:nth-child(6) { --spot-x: 66.4%; --spot-y: 70.6%; --chip-x: 52%; --chip-y: 46%; width: 15.5%; }
+
+.bet-spot::after {
+  content: '';
+  position: absolute;
+  inset: 5%;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+
+.bet-spot:hover:not(:disabled)::after,
+.bet-spot:focus-visible::after {
+  border-color: rgba(255, 235, 151, 0.82);
+  box-shadow: inset 0 0 18px rgba(255, 214, 79, 0.28), 0 0 16px rgba(255, 205, 62, 0.72);
+  transform: scale(1.03);
+}
+
+.bet-spot:active:not(:disabled)::after {
+  transform: scale(0.96);
+}
+
+.bet-spot:focus-visible {
+  outline: none;
+}
+
+.placed-chip-stack {
+  position: absolute;
+  left: var(--chip-x, 50%);
+  top: var(--chip-y, 50%);
+  z-index: 7;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.placed-chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: clamp(28px, 3.7vw, 52px);
+  height: auto;
+  filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.72));
+  animation: chipLand 220ms cubic-bezier(0.2, 0.9, 0.25, 1.25) both;
+}
+
+.placed-chip:nth-child(1) { transform: translate(-50%, -50%) rotate(-7deg); }
+.placed-chip:nth-child(2) { transform: translate(-24%, -66%) rotate(9deg); }
+.placed-chip:nth-child(3) { transform: translate(-78%, -72%) rotate(-12deg); }
+.placed-chip:nth-child(4) { transform: translate(-46%, -98%) rotate(4deg); }
+
+@keyframes chipLand {
+  from { opacity: 0; margin-top: -24px; }
+  to { opacity: 1; margin-top: 0; }
+}
+
+/* Huy hiệu hiển thị xu đã cược */
+.my-bet-badge {
+  position: absolute;
+  top: 2%;
+  right: 1%;
+  background: linear-gradient(180deg, #ffdc69 0%, #c48b29 100%);
+  border: 1px solid #fff2ba;
+  border-radius: 20px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 900;
+  color: #240c02;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+  z-index: 6;
+  display: none;
+}
+
+.bet-spot.has-bet .my-bet-badge {
+  display: block;
+}
+
+/* Tổng tiền cả bàn */
+.spot-board-total {
+  position: absolute;
+  bottom: -7%;
+  min-width: 62px;
+  padding: 2px 6px;
+  border: 1px solid rgba(225, 177, 77, 0.68);
+  border-radius: 999px;
+  background: rgba(22, 8, 4, 0.78);
+  text-align: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #a8dfbc;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
+
+/* Hiệu ứng trúng thưởng hào quang rực rỡ */
+.bet-spot.is-winner {
+  animation: winHalo 1.2s infinite alternate;
+}
+
+@keyframes winHalo {
+  0% { filter: drop-shadow(0 0 10px rgba(255, 225, 100, 0.4)); transform: translate(-50%, -50%) scale(1.01); }
+  100% { filter: drop-shadow(0 0 28px rgba(255, 235, 120, 0.95)); transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ===================================================================
+   4.6. THANH ĐIỀU KHIỂN ĐÁY: CHAT, KHAY CHIP & NÚT CƯỢC
+   =================================================================== */
+.bottom-control-bar {
+  position: absolute;
+  bottom: 1.2%;
+  left: 1.5%;
+  right: 1.5%;
+  height: 11%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Nút Chat bên trái */
+.chat-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.7));
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.chat-btn:hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 4px 9px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 8px rgba(255, 214, 103, 0.5));
+}
+
+.chat-btn img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* Khay Chip cược */
+.chips-carousel-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carousel-arrow {
+  width: 30px;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.carousel-arrow:hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 7px rgba(255, 214, 103, 0.48));
+}
+
+.carousel-arrow img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.chip-rack {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chip-slot-btn {
+  width: clamp(48px, 4.8vw, 64px);
+  height: clamp(48px, 4.8vw, 64px);
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.chip-slot-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6));
+}
+
+.chip-slot-btn:hover:not(:disabled) {
+  transform: translateY(-4px) scale(1.08);
+}
+
+.chip-slot-btn.selected {
+  transform: translateY(-7px) scale(1.15);
+  filter: drop-shadow(0 0 12px rgba(255, 215, 60, 0.85));
+}
+
+.chip-slot-btn.selected::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid #fff0a8;
+  box-shadow: 0 0 10px #f5ce75;
+}
+
+/* Nút Xóa cược & Đặt cược to màu đỏ */
+.bet-actions-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-clear-bet {
+  width: clamp(126px, 12.6vw, 170px);
+  height: clamp(44px, 4.5vw, 56px);
+  padding: 0;
+  background: url('/assets/arena/button-clear.png') center / 100% 100% no-repeat;
+  border: 0;
+  cursor: pointer;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.58));
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.btn-clear-bet:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.08) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.62));
+}
+
+.btn-clear-bet:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-confirm-bet {
+  width: clamp(138px, 14vw, 190px);
+  height: clamp(48px, 4.9vw, 62px);
+  padding: 0;
+  background: url('/assets/arena/button-bet.png') center / 100% 100% no-repeat;
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.12s, filter 0.12s;
+  animation: pulseBetBtn 2.2s infinite;
+}
+
+@keyframes pulseBetBtn {
+  0%, 100% { filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.66)) drop-shadow(0 0 5px rgba(216, 39, 30, 0.48)); }
+  50% { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 13px rgba(255, 74, 44, 0.86)); }
+}
+
+.btn-confirm-bet:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.15);
+}
+
+.btn-confirm-bet:active {
+  transform: translateY(1px);
+}
+
+/* ===================================================================
+   5. CỬA SỔ DIALOG / MODAL THIẾT KẾ HOÀNG GIA
+   =================================================================== */
+.custom-modal {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: auto;
+  border: none;
+  background: transparent;
+  padding: 0;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.custom-modal::backdrop {
+  background: rgba(10, 3, 2, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.modal-card {
+  width: min(92vw, 540px);
+  background: linear-gradient(145deg, #2b1510 0%, #140806 100%);
+  border: 2px solid #ca9a47;
+  border-radius: 22px;
+  padding: 24px;
+  color: #ffeed5;
+  box-shadow: 0 0 50px rgba(0,0,0,0.9), 0 0 30px rgba(220, 160, 50, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #774f26;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.gold-title {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffda78;
+  margin: 0;
+}
+
+.btn-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 26px;
+  color: #ffcf78;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-desc {
+  font-size: 13px;
+  color: #dfcaa8;
+  margin: 0 0 16px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.admin-duration-control {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid rgba(202, 154, 71, 0.55);
+  border-radius: 12px;
+  background: rgba(255, 216, 117, 0.06);
+}
+
+.admin-duration-control label {
+  display: block;
+  margin-bottom: 8px;
+  color: #ffdf9e;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-duration-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 9px;
+}
+
+.admin-duration-row select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #946931;
+  border-radius: 10px;
+  color: #ffeed5;
+  background: #20100c;
+  font: inherit;
+  font-weight: 700;
+}
+
+.admin-duration-row .btn-gold-primary {
+  height: 44px;
+}
+
+.admin-duration-control .field-hint {
+  margin: 7px 0 0;
+  color: #bfa588;
+}
+
+@media (max-width: 420px) {
+  .admin-duration-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Modal mở bát */
+.modal-bowl-stage {
+  position: relative;
+  width: 220px;
+  height: 170px;
+  margin: 16px auto;
+}
+
+.bowl-plate {
+  position: absolute;
+  left: 50%;
+  bottom: -25px;
+  z-index: 0;
+  width: 205px;
+  transform: translateX(-50%) scaleY(0.58);
+  transform-origin: center;
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.48));
+}
+
+.bowl-plate img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.modal-bowl-dice {
+  position: absolute;
+  bottom: 23px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 1;
+}
+
+.modal-bowl-lid {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(calc(var(--lift, 0) * -120px));
+  width: 170px;
+  z-index: 5;
+  transition: transform 0.15s ease-out;
+}
+
+.modal-bowl-lid img {
+  width: 100%;
+}
+
+.bowl-reveal-controls {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.bowl-reveal-controls input[type="range"] {
+  width: 80%;
+  margin: 10px 0;
+}
+
+.bowl-outcome-text {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffd86b;
+  min-height: 24px;
+  margin-top: 10px;
+}
+
+.bowl-next {
+  text-align: center;
+  font-size: 11px;
+  color: #bfa588;
+  margin-top: 8px;
+}
+
+/* Thống kê tỷ lệ */
+.stats-symbols-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-item {
+  background: rgba(18, 8, 6, 0.7);
+  border: 1px solid #734d26;
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+}
+
+.stat-item img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.stat-val {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffd86b;
+  margin-top: 4px;
+}
+
+.user-stats-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  font-size: 12px;
+  background: rgba(18, 8, 6, 0.6);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+/* Thông báo phòng nổi */
+.floating-room-notice {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 14, 10, 0.94);
+  border: 1.5px solid #dca74d;
+  border-radius: 20px;
+  padding: 6px 18px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffdf94;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.8);
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* Phần tử ẩn trợ năng và logic ngầm */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
+  .top-header {
+    top: 0.5%;
+    height: 11.5%;
+  }
+
+  .user-profile {
+    gap: 6px;
+    padding: 3px 8px 3px 4px;
+  }
+
+  .profile-avatar-wrap {
+    width: 34px;
+    height: 34px;
+  }
+
+  .vip-crown { display: none; }
+  .player-name { max-width: 82px; font-size: 9px; }
+  .room-code-badge { font-size: 7px; }
+  .balance-value { font-size: 10px; }
+  .balance-pill { padding-left: 5px; }
+  .brand-logo { height: 48px; }
+  .top-actions { gap: 5px; }
+
+  .circle-btn {
+    width: 32px;
+    height: 32px;
+    border-width: 1px;
+    font-size: 12px;
+  }
+
+  .left-sidebar,
+  .right-sidebar {
+    top: 14%;
+    height: 70%;
+    padding: 4px 3px;
+    border-radius: 9px;
+  }
+
+  .sidebar-header {
+    padding: 2px 4px 5px;
+    font-size: 8px;
+  }
+
+  .vip-players-list { gap: 3px; padding: 3px 0; }
+  .vip-player-row { gap: 3px; padding: 3px; border-radius: 6px; }
+  .vip-player-avatar-wrap { width: 25px; height: 25px; }
+  .vip-crown-mini { display: none; }
+  .vip-level-tag { font-size: 6px; }
+  .vip-player-name { font-size: 7px; }
+  .vip-player-coin { font-size: 7px; }
+
+  .history-grid-20 {
+    gap: 2px;
+    padding: 4px 2px;
+  }
+
+  .history-token {
+    width: 18px;
+    height: 18px;
+    border-width: 1px;
+    padding: 1px;
+  }
+
+  .stats-footer-btn {
+    height: 27px;
+    padding: 0 6px;
+    font-size: 7px;
+  }
+
+  .center-stage-top {
+    top: 13.5%;
+    height: 20.5%;
+  }
+
+  .floating-card {
+    width: 24%;
+    padding: 4px 5px;
+    border-radius: 8px;
+  }
+
+  .floating-card .card-label { font-size: 6px; letter-spacing: 0; }
+  .floating-card .digital-clock { font-size: 19px; }
+  .floating-card .phase-text { font-size: 7px; }
+  .stage-bowl-lid { width: 105px; }
+  .dice-3d-preview { width: 112px; }
+
+  .spot-board-total { min-width: 42px; padding: 1px 3px; font-size: 6px; }
+
+  .bottom-control-bar {
+    bottom: 0.6%;
+    height: 12%;
+    gap: 3px;
+  }
+
+  .chat-btn {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    font-size: 17px;
+  }
+
+  .chips-carousel-wrap { gap: 3px; }
+  .carousel-arrow { display: none; }
+  .chip-rack { gap: 1px; }
+  .chip-slot-btn { width: 44px; height: 44px; }
+
+  .bet-actions-wrap { gap: 3px; }
+  .btn-clear-bet { width: 104px; height: 44px; padding: 0; background-size: 104px 38px; }
+  .btn-confirm-bet { width: 112px; height: 44px; padding: 0; background-size: 112px 39px; }
+}
+
+/* Dynamic visibility must win over component display declarations above. */
+[hidden] {
+  display: none !important;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #fff0a8;
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .bowl-stage[data-state=shaking] .bowl-lid { animation: none; }
-  #clock-progress, .in-room .symbol-card { transition: none; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-.in-room [hidden] { display: none; }

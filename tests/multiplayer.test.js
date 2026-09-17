@@ -174,6 +174,10 @@ test('HTTP API remains JSON; source and archive files are not publicly served', 
     assert.match(response.headers.get('content-type'), /application\/json/);
     assert.ok(await response.json());
   }
+  const music = await fetch(url + '/assets/audio/tet-background.mp3', { method: 'HEAD' });
+  assert.equal(music.status, 200);
+  assert.equal(music.headers.get('content-type'), 'audio/mpeg');
+  assert.ok(Number(music.headers.get('content-length')) > 0);
   const unknown = await fetch(url + '/api/unknown');
   assert.equal(unknown.status, 404);
   assert.deepEqual(await unknown.json(), { error: 'Not found' });

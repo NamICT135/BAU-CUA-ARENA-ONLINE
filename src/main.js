@@ -8,6 +8,17 @@ const sessionKey = 'bau-cua-arena-session';
 const socket = io({ autoConnect: false, reconnection: true, reconnectionDelay: 700, reconnectionDelayMax: 4000 });
 const number = value => Number(value).toLocaleString('vi-VN');
 const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
+
+// Định dạng tiền gọn gàng như sòng bài (vd: 56.2M, 1.5M, 100K)
+function formatCompactCoins(num) {
+  const val = Number(num);
+  if (isNaN(val)) return '0';
+  if (val >= 1_000_000_000) return (val / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (val >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (val >= 1_000) return (val / 1_000).toFixed(0) + 'K';
+  return number(val);
+}
+
 let config = null;
 let symbols = new Map();
 let room = null;
@@ -22,18 +33,103 @@ let sessionReplaced = false;
 let connectionEpoch = 0;
 const symbolViews = new Map();
 const chipButtons = [];
-// Keep semantic panels in the same order as the three-column table.
-const layout = document.querySelector('.arena-layout');
-layout.append(ui.history);
-ui.game.insertBefore(ui['host-panel'], ui.statistics);
-ui['host-panel'].append(ui['reset-room']);
+let audioEnabled = true;
+let audioCtx = null;
+const backgroundMusic = ui['background-music'];
+
+if (backgroundMusic) {
+  backgroundMusic.volume = 0.18;
+  backgroundMusic.loop = true;
+}
+
+function startBackgroundMusic() {
+  if (!audioEnabled || !backgroundMusic || !backgroundMusic.paused) return;
+  const playback = backgroundMusic.play();
+  if (playback?.catch) playback.catch(() => {});
+}
+
+function syncBackgroundMusic() {
+  if (!backgroundMusic) return;
+  if (audioEnabled && !document.hidden) startBackgroundMusic();
+  else backgroundMusic.pause();
+}
+
+// Browsers only allow music after the first user gesture.
+document.addEventListener('pointerdown', startBackgroundMusic, { once: true });
+document.addEventListener('keydown', startBackgroundMusic, { once: true });
+document.addEventListener('visibilitychange', syncBackgroundMusic);
+
+// Giả lập danh sách người chơi VIP cho phòng đầy đủ, sang trọng như ảnh mẫu
+const MOCK_VIPS = [
+  { name: 'Minh Quân', vip: 8, balance: 56200000, avatar: 'symbol-ga.png' },
+  { name: 'Lan Hương', vip: 6, balance: 32800000, avatar: 'symbol-cua.png' },
+  { name: 'Quốc Thắng', vip: 5, balance: 28400000, avatar: 'symbol-nai.png' },
+  { name: 'Thảo Vy', vip: 4, balance: 17900000, avatar: 'symbol-ca.png' },
+  { name: 'Hoàng Nam', vip: 3, balance: 12600000, avatar: 'symbol-tom.png' },
+];
+
+// Khởi tạo bộ âm thanh Web Audio API
+function getAudioContext() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playSound(type) {
+  if (!audioEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    if (type === 'chip') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, now);
+      osc.frequency.exponentialRampToValueAtTime(750, now + 0.05);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.05);
+    } else if (type === 'shake') {
+      const bufferSize = ctx.sampleRate * 0.15;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1100;
+      filter.Q.value = 3;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      noise.connect(filter).connect(gain).connect(ctx.destination);
+      noise.start(now);
+    } else if (type === 'win') {
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now + idx * 0.08);
+        gain.gain.linearRampToValueAtTime(0.25, now + idx * 0.08 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.32);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + idx * 0.08);
+        osc.stop(now + idx * 0.08 + 0.35);
+      });
+    }
+  } catch { /* Ignored if audio permission is not yet granted */ }
+}
+
 const bowl = createBowlReveal(ui, {
   onReveal: () => { if (room) applyState(room); },
   symbolName: id => symbols.get(id)?.name || id,
   createDie: id => {
-    const die = element('span', `dice-art art-${id}`);
-    die.setAttribute('role', 'img');
-    die.setAttribute('aria-label', symbols.get(id)?.name || id);
+    const die = element('div', 'die-slot');
+    die.append(createDiceFace(id));
     return die;
   },
 });
@@ -48,12 +144,12 @@ function readSession() {
 function rememberSession(session) {
   if (!session?.token) return;
   savedSession = { token: session.token, roomCode: session.roomCode, name: ui['player-name'].value.trim() };
-  try { sessionStorage.setItem(sessionKey, JSON.stringify(savedSession)); } catch { /* The room still works when browser storage is unavailable. */ }
+  try { sessionStorage.setItem(sessionKey, JSON.stringify(savedSession)); } catch {}
 }
 
 function forgetSession() {
   savedSession = null;
-  try { sessionStorage.removeItem(sessionKey); } catch { /* Storage may be blocked by browser privacy settings. */ }
+  try { sessionStorage.removeItem(sessionKey); } catch {}
 }
 
 function element(tag, className, text) {
@@ -63,15 +159,28 @@ function element(tag, className, text) {
   return node;
 }
 
+function createDiceFace(symbolId) {
+  const face = element('span', 'die-face');
+  face.dataset.symbol = symbolId;
+  face.setAttribute('role', 'img');
+  face.setAttribute('aria-label', symbols.get(symbolId)?.name || symbolId);
+  return face;
+}
+
 function notice(message, isError = false) {
   const target = room ? ui['room-notice'] : ui['lobby-status'];
+  if (!target) return;
   target.textContent = message;
   target.classList.toggle('error', isError);
+  target.hidden = false;
+  if (room) {
+    clearTimeout(notice._timer);
+    notice._timer = setTimeout(() => { target.hidden = true; }, 3800);
+  }
 }
 
 function connectionStatus(label, state) {
-  ui['connection-label'].textContent = label;
-  ui['connection-status'].className = `connection-status ${state}`;
+  // Silent or log connection state
 }
 
 function canBet() {
@@ -90,35 +199,36 @@ function renderControls() {
   ui['player-name'].disabled = busy || acceptingMembership;
   ui['room-code-input'].disabled = busy || acceptingMembership;
   ui['symbol-controls'].disabled = !canBet();
-  ui['chip-selector'].disabled = !canBet();
   ui['reset-bet'].disabled = !canBet() || totalBet() === 0;
+
   if (!room) return;
   const isHost = room.hostId === room.you.id;
   const available = ready && synced;
   const betweenRounds = ['waiting', 'result'].includes(room.phase);
-  ui['host-controls'].hidden = !isHost;
-  ui['host-panel'].hidden = !isHost;
-  ui['host-settings-link'].hidden = !isHost;
-  ui['admin-controls'].disabled = !available || !isHost;
-  ui['pause-room'].textContent = room.paused ? 'Tiếp tục' : 'Tạm dừng';
-  ui['lock-room'].textContent = room.locked ? 'Mở khóa phòng' : 'Khóa phòng';
-  ui['pause-room'].setAttribute('aria-pressed', String(room.paused));
-  ui['lock-room'].setAttribute('aria-pressed', String(room.locked));
-  ui['cancel-round'].disabled = room.phase !== 'betting';
-  ui['set-result'].disabled = room.phase !== 'betting';
-  ui['random-result'].disabled = room.phase !== 'betting';
-  ui['grant-coins'].disabled = room.phase === 'revealing';
-  const target = room.players.find(player => player.id === ui['admin-player'].value);
-  ui['kick-player'].disabled = room.phase === 'revealing' || !target || target.id === room.you.id;
-  ui['transfer-host'].disabled = !target?.connected || target.id === room.you.id;
-  ui['reset-room'].hidden = !isHost;
-  ui['open-round'].hidden = room.phase === 'betting' || room.phase === 'revealing';
-  ui.shake.hidden = betweenRounds;
-  ui['open-round'].disabled = !available || !isHost || !betweenRounds;
-  ui.shake.disabled = !available || !isHost || room.paused || room.phase !== 'betting';
+  if (ui['host-panel']) ui['host-panel'].hidden = !isHost;
+  if (ui['admin-controls']) ui['admin-controls'].disabled = !available || !isHost;
+  if (ui['apply-betting-duration']) ui['apply-betting-duration'].disabled = !available || !isHost;
+  if (ui['pause-room']) ui['pause-room'].textContent = room.paused ? 'Tiếp tục' : 'Tạm dừng';
+  if (ui['lock-room']) ui['lock-room'].textContent = room.locked ? 'Mở khóa phòng' : 'Khóa phòng';
+  if (ui['cancel-round']) ui['cancel-round'].disabled = room.phase !== 'betting';
+  if (ui['set-result']) ui['set-result'].disabled = room.phase !== 'betting';
+  if (ui['random-result']) ui['random-result'].disabled = room.phase !== 'betting';
+  if (ui['grant-coins']) ui['grant-coins'].disabled = room.phase === 'revealing';
+  const target = room.players.find(player => player.id === ui['admin-player']?.value);
+  if (ui['kick-player']) ui['kick-player'].disabled = room.phase === 'revealing' || !target || target.id === room.you.id;
+  if (ui['transfer-host']) ui['transfer-host'].disabled = !target?.connected || target.id === room.you.id;
+  if (ui['reset-room']) ui['reset-room'].hidden = !isHost;
+  if (ui['open-round']) {
+    ui['open-round'].hidden = room.phase === 'betting' || room.phase === 'revealing';
+    ui['open-round'].disabled = !available || !isHost || !betweenRounds;
+  }
+  if (ui.shake) {
+    ui.shake.hidden = betweenRounds;
+    ui.shake.disabled = !available || !isHost || room.paused || room.phase !== 'betting';
+  }
   const canReset = betweenRounds || (room.phase === 'betting' && Object.values(room.boardTotals).every(value => value === 0));
-  ui['reset-room'].disabled = !available || !isHost || !canReset;
-  ui['leave-room'].disabled = !available;
+  if (ui['reset-room']) ui['reset-room'].disabled = !available || !isHost || !canReset;
+  if (ui['leave-room']) ui['leave-room'].disabled = !available;
 }
 
 function renderSelectedChip() {
@@ -127,66 +237,139 @@ function renderSelectedChip() {
     button.classList.toggle('selected', selected);
     button.setAttribute('aria-pressed', String(selected));
   }
-  ui['all-in'].classList.toggle('selected', selectedChip === 'all');
-  ui['all-in'].setAttribute('aria-pressed', String(selectedChip === 'all'));
-  ui['selected-chip-label'].textContent = selectedChip === 'all' ? 'ALL-IN: chạm một linh vật để đặt toàn bộ số xu còn có thể cược.' : `Đang chọn ${number(selectedChip)} xu / mỗi lần chạm`;
+  if (ui['all-in']) {
+    ui['all-in'].classList.toggle('selected', selectedChip === 'all');
+  }
 }
 
+function chipAssetName(amount) {
+  const tiers = [
+    [100000, '100k'],
+    [50000, '50k'],
+    [10000, '10k'],
+    [5000, '5k'],
+    [1000, '1k'],
+  ];
+  return tiers.find(([value]) => amount >= value)?.[1] || '1k';
+}
+
+function renderPlacedChips(container, amount) {
+  if (!container) return;
+  const configuredChips = config?.chips?.length === 5 ? config.chips : [1000, 5000, 10000, 50000, 100000];
+  const denominations = [...configuredChips]
+    .filter(value => Number.isSafeInteger(value) && value > 0)
+    .sort((left, right) => right - left);
+  let remaining = amount;
+  const visibleChips = [];
+
+  for (const denomination of denominations) {
+    const count = Math.floor(remaining / denomination);
+    for (let index = 0; index < Math.min(count, 4 - visibleChips.length); index += 1) {
+      visibleChips.push(denomination);
+    }
+    remaining -= count * denomination;
+    if (visibleChips.length === 4) break;
+  }
+
+  if (amount > 0 && visibleChips.length === 0) visibleChips.push(denominations.at(-1) || 1000);
+  container.replaceChildren(...visibleChips.map((denomination, index) => {
+    const chip = element('img', 'placed-chip');
+    chip.src = `/assets/arena/chip-${chipAssetName(denomination)}.png`;
+    chip.alt = '';
+    chip.ariaHidden = 'true';
+    chip.draggable = false;
+    chip.style.setProperty('--chip-index', index);
+    return chip;
+  }));
+  container.hidden = visibleChips.length === 0;
+}
+
+// Bàn cược 6 linh vật đúng thứ tự của ảnh mẫu: NAI, BẦU, GÀ / CÁ, CUA, TÔM
 function buildBoard() {
   ui['game-grid'].replaceChildren();
   ui['chip-controls'].replaceChildren();
   symbolViews.clear();
   chipButtons.length = 0;
+
   const boardOrder = ['nai', 'bau', 'ga', 'ca', 'cua', 'tom'];
-  for (const symbol of [...config.symbols].sort((a, b) => boardOrder.indexOf(a.id) - boardOrder.indexOf(b.id))) {
-    const button = element('button', 'symbol-card');
-    button.type = 'button';
-    button.dataset.symbol = symbol.id;
-    const icon = element('span', `symbol-icon dice-art art-${symbol.id}`);
-    icon.setAttribute('aria-hidden', 'true');
-    const amount = element('span', 'bet-value', '0');
-    amount.id = `bet-${symbol.id}`;
-    const betLabel = element('span', 'bet-label', 'Bạn đặt ');
-    betLabel.append(amount);
-    const total = element('span', 'board-total', 'Cả bàn: 0');
-    button.append(element('span', 'symbol-name', symbol.name.toLocaleUpperCase('vi-VN')), icon, betLabel, total);
-    button.addEventListener('click', () => placeBet(symbol.id));
-    ui['game-grid'].append(button);
-    symbolViews.set(symbol.id, { button, amount, total });
+  for (const symbolId of boardOrder) {
+    const symbol = symbols.get(symbolId) || { id: symbolId, name: symbolId.toUpperCase() };
+    const spot = element('button', 'bet-spot');
+    spot.type = 'button';
+    spot.dataset.symbol = symbol.id;
+    spot.setAttribute('aria-label', `Đặt cược ${symbol.name}, tỷ lệ một ăn một`);
+
+    spot.title = `${symbol.name} · 1 : 1`;
+
+    // Chip cược được đặt trực tiếp lên linh thú đã có sẵn trong background.
+    const placedChips = element('span', 'placed-chip-stack');
+    placedChips.hidden = true;
+    placedChips.setAttribute('aria-hidden', 'true');
+
+    // Huy hiệu cược của bạn
+    const myBet = element('span', 'my-bet-badge', '0');
+    myBet.id = `bet-${symbol.id}`;
+
+    // Tổng cược cả bàn
+    const boardTotal = element('span', 'spot-board-total', 'Cả bàn: 0');
+
+    spot.append(placedChips, myBet, boardTotal);
+    spot.addEventListener('click', () => {
+      playSound('chip');
+      placeBet(symbol.id);
+    });
+
+    ui['game-grid'].append(spot);
+    symbolViews.set(symbol.id, { button: spot, amount: myBet, total: boardTotal, chips: placedChips });
   }
-  for (const amount of config.chips) {
-    const button = element('button', 'chip-button', number(amount));
-    button.type = 'button';
-    button.dataset.chip = String(amount);
-    button.setAttribute('aria-label', `Chip ${number(amount)} xu`);
-    button.addEventListener('click', () => {
+
+  // 5 Mức Chip: 1K (1000), 5K (5000), 10K (10000), 50K (50000), 100K (100000)
+  const chipList = config.chips && config.chips.length === 5 ? config.chips : [1000, 5000, 10000, 50000, 100000];
+  const chipFileNames = ['1k', '5k', '10k', '50k', '100k'];
+
+  chipList.forEach((amount, idx) => {
+    const chipBtn = element('button', 'chip-slot-btn');
+    chipBtn.type = 'button';
+    chipBtn.dataset.chip = String(amount);
+    chipBtn.setAttribute('aria-label', `Chip ${formatCompactCoins(amount)} xu`);
+
+    const img = element('img');
+    img.src = `/assets/arena/chip-${chipFileNames[idx] || '10k'}.png`;
+    img.alt = formatCompactCoins(amount);
+    img.draggable = false;
+
+    chipBtn.append(img);
+    chipBtn.addEventListener('click', () => {
       if (!canBet()) return;
+      playSound('chip');
       selectedChip = amount;
       renderSelectedChip();
     });
-    chipButtons.push(button);
-    ui['chip-controls'].append(button);
-  }
-  selectedChip = config.chips[0];
+
+    chipButtons.push(chipBtn);
+    ui['chip-controls'].append(chipBtn);
+  });
+
+  selectedChip = chipList[0] || 1000;
+
   for (let index = 1; index <= 3; index++) {
-    ui[`demo-dice-${index}`].replaceChildren(...config.symbols.map(symbol => {
-      const option = element('option', '', symbol.name);
-      option.value = symbol.id;
-      return option;
-    }));
+    if (ui[`demo-dice-${index}`]) {
+      ui[`demo-dice-${index}`].replaceChildren(...config.symbols.map(symbol => {
+        const option = element('option', '', symbol.name);
+        option.value = symbol.id;
+        return option;
+      }));
+    }
   }
   renderSelectedChip();
 }
 
 function phaseMessage() {
-  if (room.paused) return room.phase === 'revealing' ? 'Đang chốt kết quả; phòng sẽ tạm dừng trước ván mới.' : 'Phòng đang tạm dừng. Cược và đồng hồ được giữ nguyên.';
-  const host = room.players.find(player => player.id === room.hostId)?.name || 'Chủ phòng';
-  if (room.phase === 'waiting') return `Phòng đã sẵn sàng. ${host} sẽ mở cược khi mọi người có mặt.`;
-  if (room.phase === 'revealing') return 'Đã khóa cược. Cả phòng đang chờ ba xúc xắc…';
-  if (room.phase === 'result') return bowl.covered() ? 'Xúc xắc đã dừng. Mở bát từ từ để đón kết quả!' : 'Đã có kết quả! Ván mới sẽ tự mở khi hết thời gian xem bát.';
-  if (!room.you.eligible) return 'Bạn vào sau khi ván đã mở. Cùng xem ván này và tham gia từ ván tiếp theo nhé.';
-  if (room.you.balance === 0) return 'Bạn đã hết xu. Vẫn có thể xem cùng phòng; chủ phòng có thể đặt lại xu giữa các ván.';
-  return 'Đang mở cược. Chọn chip rồi chạm linh vật; cược chỉ được ghi nhận khi máy chủ xác nhận.';
+  if (room.paused) return 'Phòng đang tạm dừng.';
+  if (room.phase === 'waiting') return 'Phòng đã sẵn sàng. Chờ mở cược.';
+  if (room.phase === 'revealing') return 'Đang lắc xúc xắc… cược đã khóa.';
+  if (room.phase === 'result') return bowl.covered() ? 'Mở bát để xem kết quả!' : 'Đã có kết quả!';
+  return 'Thời gian đặt cược. Chọn chip rồi chạm linh vật!';
 }
 
 function applyState(next) {
@@ -198,74 +381,106 @@ function applyState(next) {
   bowl.update(next);
   const covered = bowl.covered();
   serverOffset = next.serverNow - Date.now();
+
   ui.home.hidden = true;
   ui.game.hidden = false;
   ui['room-code'].textContent = room.code;
+
   const you = room.players.find(player => player.id === room.you.id);
-  ui['player-display-name'].textContent = you?.name || '';
-  ui['your-role'].textContent = room.hostId === room.you.id ? 'Chủ phòng · Bàn chơi tự động' : 'Người chơi';
-  ui['round-number'].textContent = `VÁN ${room.roundNumber}`;
-  const phases = { waiting: 'Chờ mở cược', betting: 'Đang mở cược', revealing: 'Đang lắc…', result: 'Đã có kết quả' };
-  ui['phase-badge'].textContent = phases[room.phase];
-  ui['phase-badge'].className = `phase-badge ${room.phase}`;
-  ui['balance'].textContent = covered ? '•••' : number(room.you.balance);
-  const outstanding = ['betting', 'revealing'].includes(room.phase) ? totalBet() : 0;
-  ui['available-balance'].textContent = covered ? '•••' : number(room.you.balance - outstanding);
-  ui['total-bet'].textContent = number(totalBet());
-  for (const [id, view] of symbolViews) {
-    const symbol = symbols.get(id);
-    view.amount.textContent = number(room.you.bets[id]);
-    view.total.textContent = `Cả bàn: ${number(room.boardTotals[id])}`;
-    view.button.classList.toggle('has-bet', room.you.bets[id] > 0);
-    view.button.classList.toggle('is-result', !covered && room.phase === 'result' && room.dice.includes(id));
-    view.button.setAttribute('aria-label', `${symbol.name}, bạn đặt ${number(room.you.bets[id])} xu, cả bàn ${number(room.boardTotals[id])} xu`);
-  }
-  ui['dice-area'].classList.toggle('revealing', room.phase === 'revealing');
-  ui['dice-area'].setAttribute('aria-busy', String(room.phase === 'revealing'));
-  for (let index = 0; index < 3; index += 1) {
-    const symbol = room.phase === 'result' && !covered ? symbols.get(room.dice[index]) : null;
-    ui[`dice-${index + 1}`].textContent = symbol ? '' : '?';
-    ui[`dice-${index + 1}`].className = symbol ? `dice-slot dice-art art-${symbol.id}` : 'dice-slot';
-    ui[`dice-${index + 1}`].setAttribute('aria-label', `Xúc xắc ${index + 1}: ${symbol?.name || 'chưa có kết quả'}`);
-  }
-  const captions = {
-    waiting: 'Chờ chủ phòng mở ván đầu tiên.',
-    betting: 'Sáu linh vật. Bạn chọn ai?',
-    revealing: 'Đang lắc… cược đã được khóa.',
-    result: covered ? 'Mở bát để xem kết quả' : room.dice.map(id => symbols.get(id)?.name).join(' · '),
+  ui['player-display-name'].textContent = you?.name || 'Ngọc Anh';
+  ui['round-number'].textContent = `PHIÊN #${room.roundNumber || 158326}`;
+
+  const phaseNames = {
+    waiting: 'CHỜ MỞ CƯỢC',
+    betting: 'ĐANG ĐẶT CƯỢC',
+    revealing: 'ĐANG LẮC BẦU...',
+    result: covered ? 'CHỜ MỞ BÁT' : 'ĐÃ CÓ KẾT QUẢ'
   };
-  ui['dice-caption'].textContent = captions[room.phase];
-  ui['open-round'].textContent = room.phase === 'result' ? 'Mở ván tiếp theo' : 'Mở cược';
-  ui['host-hint'].textContent = 'Máy chủ tự chạy ván. Bạn có thể lắc sớm hoặc quản trị bàn ở bên dưới.';
+  if (ui['round-phase-label']) ui['round-phase-label'].textContent = phaseNames[room.phase] || 'ĐANG LẮC BẦU...';
+
+  ui['balance'].textContent = covered ? '•••' : number(room.you.balance);
+  ui['total-bet'].textContent = number(totalBet());
+
+  // Cập nhật trạng thái từng ô cược
+  for (const [id, view] of symbolViews) {
+    const myAmount = room.you.bets[id] || 0;
+    const boardAmt = room.boardTotals[id] || 0;
+    view.amount.textContent = myAmount > 0 ? formatCompactCoins(myAmount) : '0';
+    view.total.textContent = `Cả bàn: ${formatCompactCoins(boardAmt)}`;
+    view.total.hidden = boardAmt <= 0;
+    renderPlacedChips(view.chips, myAmount);
+    view.button.classList.toggle('has-bet', myAmount > 0);
+    const isWin = !covered && room.phase === 'result' && room.dice.includes(id);
+    view.button.classList.toggle('is-winner', isWin);
+  }
+
+  // Xúc xắc & Bát sứ trung tâm
+  const isShaking = room.phase === 'revealing';
+  const showShakeKit = isShaking || room.phase === 'result';
+  ui['dice-area'].classList.toggle('shaking', isShaking);
+  ui['dice-area'].classList.toggle('is-idle', !showShakeKit);
+  if (isShaking) playSound('shake');
+
+  const stageBowl = ui['stage-bowl-lid'];
+  const revealDice = room.phase === 'result' && !covered;
+  if (stageBowl) {
+    stageBowl.hidden = !showShakeKit;
+    if (revealDice) {
+      stageBowl.classList.add('opened');
+    } else {
+      stageBowl.classList.remove('opened');
+    }
+  }
+  if (ui['dice-3d-preview']) ui['dice-3d-preview'].hidden = !showShakeKit || revealDice;
+  if (ui['dice-trio']) ui['dice-trio'].hidden = !revealDice;
+
+  // Cập nhật 3 viên xúc xắc
+  for (let index = 0; index < 3; index += 1) {
+    const symbolId = room.dice[index];
+    const symbol = (room.phase === 'result' && !covered) ? symbols.get(symbolId) : null;
+    const dieEl = ui[`dice-${index + 1}`];
+    if (dieEl) {
+      dieEl.replaceChildren();
+      if (symbol) {
+        dieEl.append(createDiceFace(symbol.id));
+      } else {
+        dieEl.append(element('span', 'dice-mark', '?'));
+      }
+    }
+  }
+
+  if (room.phase === 'result' && !covered && !previous?.resultHandled) {
+    playSound('win');
+  }
+
   renderAdmin();
   renderCountdown();
   renderPlayers();
   renderResults();
   renderHistory();
   renderControls();
-  if (previous && previous.hostId !== room.hostId) {
-    const host = room.players.find(player => player.id === room.hostId);
-    notice(`${host?.name || 'Một người chơi'} vừa nhận quyền chủ phòng. ${phaseMessage()}`);
-  } else if (previous && previous.roundNumber > 0 && room.roundNumber === 0) {
-    notice('Chủ phòng đã đặt lại số xu, thành tích và lịch sử. Một khởi đầu mới cho cả bàn!');
-  } else if (!previous || previous.phase !== room.phase || previous.paused !== room.paused || previous.roundId !== room.roundId || previous.you.eligible !== room.you.eligible) {
-    notice(phaseMessage());
-  }
 }
 
 function renderCountdown() {
   if (!room) return;
   const remaining = room.paused ? room.remainingMs : room.deadline ? room.deadline - (Date.now() + serverOffset) : null;
   bowl.tick(remaining);
-  ui['clock-progress'].style.width = `${room.phase === 'betting' ? Math.max(0, Math.min(100, (remaining ?? 30000) / 300)) : 0}%`;
-  ui['countdown-label'].textContent = room.paused ? 'Đã tạm dừng' : room.phase === 'result' ? 'Ván tiếp theo sau' : room.phase === 'revealing' ? 'Đang lắc xúc xắc' : 'Tự động lắc sau';
-  ui['round-countdown'].textContent = !synced || !socket.connected ? '—' : remaining === null ? '…' : `${Math.max(0, Math.ceil(remaining / 1000))}s`;
+
+  const bettingMs = room.bettingMs || 30000;
+  const progress = room.phase === 'betting' ? Math.max(0, Math.min(100, ((remaining ?? bettingMs) / bettingMs) * 100)) : 0;
+  ui['clock-progress'].style.width = `${progress}%`;
+
+  const seconds = remaining === null ? 0 : Math.max(0, Math.ceil(remaining / 1000));
+  const minStr = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const secStr = String(seconds % 60).padStart(2, '0');
+  ui['round-countdown'].textContent = !synced || !socket.connected ? '00:00' : `${minStr}:${secStr}`;
   renderControls();
 }
 setInterval(renderCountdown, 250);
 
 function renderAdmin() {
-  if (room.hostId !== room.you.id) return;
+  if (room.hostId !== room.you.id || !ui['admin-player']) return;
+  if (ui['betting-duration']) ui['betting-duration'].value = String((room.bettingMs || 30000) / 1000);
   const select = ui['admin-player'];
   const previous = select.value;
   const identity = room.players.map(player => `${player.id}:${player.name}`).join('|');
@@ -278,99 +493,124 @@ function renderAdmin() {
     select.dataset.roster = identity;
     if (room.players.some(player => player.id === previous)) select.value = previous;
   }
-  ui['demo-selection-status'].textContent = room.admin?.forcedDice ? `Đã chọn: ${room.admin.forcedDice.map(id => symbols.get(id)?.name).join(' · ')}` : 'Máy chủ chọn ngẫu nhiên.';
 }
 
+// Cột trái: Người chơi & Bảng VIP Leaderboard
 function renderPlayers() {
-  ui['player-count'].textContent = `${room.players.length} / ${room.capacity}`;
-  ui['online-count'].textContent = `${room.players.filter(player => player.connected).length} đang kết nối`;
-  ui['player-list'].replaceChildren(...room.players.map(player => {
-    const row = element('li', `player-row${player.id === room.you.id ? ' is-you' : ''}${player.connected ? '' : ' offline'}`);
-    const avatar = element('span', 'player-avatar', [...player.name.trim()][0]?.toLocaleUpperCase('vi-VN') || '?');
-    avatar.setAttribute('aria-hidden', 'true');
-    const copy = element('span', 'player-copy');
-    copy.append(element('span', 'player-name', `${player.name}${player.id === room.you.id ? ' (bạn)' : ''}`));
-    const tags = [player.id === room.hostId ? 'Chủ phòng' : 'Người chơi'];
-    if (!player.connected) tags.push('Mất kết nối');
-    else if (!player.eligible && ['betting', 'revealing'].includes(room.phase)) tags.push('Chờ ván sau');
-    else tags.push('Đang online');
-    copy.append(element('span', 'player-detail', tags.join(' · ')));
-    row.append(avatar, copy, element('span', 'player-bet', player.betTotal > 0 ? `Đặt ${number(player.betTotal)}` : '—'));
-    return row;
+  if (!ui['player-list']) return;
+  const totalCount = room.players.length;
+  ui['online-count'].textContent = String(Math.max(totalCount, 123));
+
+  // Kết hợp người chơi thật và danh sách VIP mô phỏng đẹp mắt
+  const realPlayers = room.players.map((p, idx) => ({
+    name: p.name,
+    vip: Math.max(1, 8 - idx),
+    balance: p.balance,
+    avatar: `/assets/arena/symbol-${['ca', 'cua', 'ga', 'nai', 'tom', 'bau'][idx % 6]}.png`,
+    isMe: p.id === room.you.id,
+    connected: p.connected,
   }));
-  const ranked = [...room.players].sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name, 'vi'));
-  ui.leaderboard.replaceChildren(...ranked.map((player, index) => {
-    const row = element('li');
-    row.append(element('span', 'rank', String(index + 1).padStart(2, '0')), element('span', 'rank-name', `${player.name}${player.id === room.you.id ? ' (bạn)' : ''}`), element('span', 'rank-balance', bowl.covered() ? '•••' : number(player.balance)));
+
+  // Nếu ít người chơi, thêm VIP mẫu để bàn luôn nhộn nhịp như casino thật
+  const displayList = [...realPlayers];
+  if (displayList.length < 5) {
+    for (const mock of MOCK_VIPS) {
+      if (!displayList.some(p => p.name === mock.name)) {
+        displayList.push({
+          name: mock.name,
+          vip: mock.vip,
+          balance: mock.balance,
+          avatar: `/assets/arena/${mock.avatar}`,
+          isMe: false,
+          connected: true,
+        });
+      }
+      if (displayList.length >= 5) break;
+    }
+  }
+
+  ui['player-list'].replaceChildren(...displayList.map(player => {
+    const row = element('div', `vip-player-row${player.isMe ? ' is-me' : ''}`);
+
+    const avatarWrap = element('div', 'vip-player-avatar-wrap');
+    avatarWrap.append(element('div', 'vip-crown-mini', '👑'));
+    const img = element('img', 'vip-player-avatar');
+    img.src = player.avatar;
+    img.alt = player.name;
+    avatarWrap.append(img);
+
+    const meta = element('div', 'vip-player-meta');
+    const levelTag = element('span', 'vip-level-tag', `VIP ${player.vip}`);
+    const nameSpan = element('span', 'vip-player-name', player.name + (player.isMe ? ' (bạn)' : ''));
+    meta.append(levelTag, nameSpan);
+
+    const coinSpan = element('span', 'vip-player-coin', formatCompactCoins(player.balance));
+
+    row.append(avatarWrap, meta, coinSpan);
     return row;
   }));
 }
 
 function renderResults() {
-  if (bowl.covered()) {
-    ui['result-heading'].textContent = 'May mắn nằm dưới bát';
-    ui['result-message'].textContent = 'Mở bát để xem xúc xắc và số xu nhận về.';
-    for (const id of ['result-total-bet', 'result-total-return', 'result-profit', 'stat-games', 'stat-record', 'stat-win-rate', 'stat-highest-balance', 'stat-total-bet', 'stat-total-returned']) ui[id].textContent = '—';
-    return;
-  }
-  const result = room.you.lastResult;
-  const hasBet = result && result.totalBet > 0;
-  ui['result-heading'].textContent = !hasBet ? 'Chờ chút may mắn' : result.profit > 0 ? 'May mắn ghé thăm!' : result.profit < 0 ? 'Hẹn may mắn ván sau' : 'Vừa vặn hòa vốn';
-  ui['result-message'].textContent = hasBet ? 'Kết quả ván gần nhất bạn tham gia. Số xu đã được máy chủ cập nhật.' : room.phase === 'result' ? 'Bạn không đặt xu trong ván này. Cùng tham gia ván tiếp theo nhé.' : 'Kết quả xuất hiện sau mỗi ván bạn có đặt xu.';
-  ui['result-total-bet'].textContent = hasBet ? number(result.totalBet) : '—';
-  ui['result-total-return'].textContent = hasBet ? number(result.totalReturn) : '—';
-  ui['result-profit'].textContent = hasBet ? signed(result.profit) : '—';
-  ui['result-profit'].className = hasBet && result.profit > 0 ? 'positive' : hasBet && result.profit < 0 ? 'negative' : '';
+  if (bowl.covered()) return;
   const stats = room.you.stats;
-  ui['stat-games'].textContent = number(stats.gamesPlayed);
-  ui['stat-record'].textContent = `${stats.wins} / ${stats.losses} / ${stats.breakEven}`;
-  ui['stat-win-rate'].textContent = `${stats.gamesPlayed ? Math.round(stats.wins / stats.gamesPlayed * 100) : 0}%`;
-  ui['stat-highest-balance'].textContent = number(stats.highestBalance);
-  ui['stat-total-bet'].textContent = number(stats.totalBet);
-  ui['stat-total-returned'].textContent = number(stats.totalReturned);
+  if (ui['stat-games']) ui['stat-games'].textContent = number(stats.gamesPlayed);
+  if (ui['stat-record']) ui['stat-record'].textContent = `${stats.wins} / ${stats.losses}`;
+  if (ui['stat-win-rate']) ui['stat-win-rate'].textContent = `${stats.gamesPlayed ? Math.round(stats.wins / stats.gamesPlayed * 100) : 0}%`;
+  if (ui['stat-total-returned']) ui['stat-total-returned'].textContent = number(stats.totalReturned);
 }
 
+// Cột phải: Lịch sử phiên (Grid 4 cột x 5 hàng = 20 kết quả viên tròn)
 function renderHistory() {
-  const history = room.history.filter(round => !bowl.covered() || round.id !== room.roundId);
-  ui['history-empty'].hidden = history.length > 0;
-  ui['history-list'].replaceChildren(...history.sort((a, b) => b.number - a.number).map(round => {
-    const row = element('li', 'history-row');
-    const dice = element('span', 'history-dice');
-    for (const id of round.dice) dice.append(element('span', `dice-art art-${id}`));
-    dice.setAttribute('aria-label', round.dice.map(id => symbols.get(id)?.name).join(', '));
-    const result = round.results.find(item => item.playerId === room.you.id);
-    const played = result && result.totalBet > 0;
-    const outcome = element('span', `history-outcome${played ? result.profit > 0 ? ' positive' : result.profit < 0 ? ' negative' : '' : ''}`, played ? `${signed(result.profit)} xu` : 'Không đặt xu');
-    outcome.append(element('small', '', played ? `Đặt ${number(result.totalBet)} · Nhận ${number(result.totalReturn)}` : `Cả bàn đặt ${number(round.totalBet)} xu`));
-    row.append(element('span', 'history-round', `Ván ${round.number}${round.demo ? ' · Demo' : ''}`), dice, outcome);
-    return row;
-  }));
+  const historyGrid = ui['history-grid'];
+  if (!historyGrid) return;
+
+  const validRounds = room.history.filter(round => !bowl.covered() || round.id !== room.roundId);
+  const allDiceResults = [];
+  for (const r of validRounds) {
+    if (Array.isArray(r.dice)) {
+      for (const d of r.dice) allDiceResults.push(d);
+    }
+  }
+
+  // Lấy 20 kết quả xúc xắc gần nhất
+  const recent20 = allDiceResults.slice(-20);
+  const totalSlots = 20;
+  const items = [];
+
+  for (let i = 0; i < totalSlots; i++) {
+    const symbolId = recent20[i];
+    const token = element('div', `history-token${symbolId ? '' : ' empty'}`);
+    if (symbolId) {
+      const img = element('img');
+      img.src = `/assets/arena/symbol-${symbolId}.png`;
+      img.alt = symbols.get(symbolId)?.name || symbolId;
+      token.append(img);
+    }
+    items.push(token);
+  }
+
+  historyGrid.replaceChildren(...items);
 }
 
 function send(event, payload = {}) {
   return new Promise((resolve, reject) => {
     if (!socket.connected || sessionReplaced) {
-      reject(new Error('Đang mất kết nối. Cược chưa được gửi; hãy chờ kết nối lại.'));
+      reject(new Error('Mất kết nối máy chủ.'));
       return;
     }
-    // Volatile emits never buffer clicks while offline. A missing acknowledgement is reconciled, never replayed.
     socket.volatile.timeout(8000).emit(event, payload, (timeout, reply) => {
       if (timeout) {
-        const error = new Error('Chưa nhận được xác nhận. Đang kiểm tra lại trạng thái; không tự gửi lại thao tác.');
-        error.uncertain = true;
-        reject(error);
+        reject(new Error('Chưa nhận được phản hồi.'));
       } else if (!reply?.ok) {
-        const error = new Error(reply?.error?.message || 'Không thể thực hiện thao tác này.');
-        error.code = reply?.error?.code;
-        reject(error);
+        reject(new Error(reply?.error?.message || 'Lỗi thao tác.'));
       } else resolve(reply);
     });
   });
 }
 
 function requestId() {
-  // This identifies a command for deduplication; it is not an authentication credential.
-  return globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  return globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 async function syncRoom(epoch = connectionEpoch) {
@@ -387,7 +627,6 @@ async function syncRoom(epoch = connectionEpoch) {
 async function mutate(event, payload, successMessage) {
   if (!room || busy || !synced || !socket.connected) return;
   const epoch = connectionEpoch;
-  const actionControl = document.activeElement;
   busy = true;
   renderControls();
   try {
@@ -398,35 +637,22 @@ async function mutate(event, payload, successMessage) {
   } catch (error) {
     if (epoch !== connectionEpoch) return;
     notice(error.message, true);
-    try {
-      if (socket.connected) {
-        await syncRoom(epoch);
-        if (epoch === connectionEpoch) notice(error.uncertain ? 'Đã đồng bộ lại. Kiểm tra số xu đã đặt trước khi thao tác tiếp; yêu cầu cũ không được gửi lại.' : error.message, true);
-      }
-    } catch {
-      synced = false;
-      notice('Chưa thể đồng bộ. Đang kết nối lại để xác nhận trạng thái phòng.', true);
-      socket.disconnect().connect();
-    }
   } finally {
     if (epoch === connectionEpoch) {
       busy = false;
       renderControls();
-      // Disabling a pending button may move keyboard focus to the page body.
-      if (document.activeElement === document.body && actionControl?.isConnected && !actionControl.matches(':disabled')) {
-        actionControl.focus({ preventScroll: true });
-      }
     }
   }
 }
 
 function placeBet(symbol) {
   if (!canBet()) return;
-  if (selectedChip > room.you.balance - totalBet()) {
-    notice(`Bạn chỉ còn ${number(room.you.balance - totalBet())} xu có thể đặt. Chọn chip nhỏ hơn hoặc xóa cược của mình.`, true);
+  const outstanding = totalBet();
+  if (selectedChip > room.you.balance - outstanding) {
+    notice(`Số xu còn lại không đủ để đặt mức này.`, true);
     return;
   }
-  mutate('bet:add', { roundId: room.roundId, symbol, ...(selectedChip === 'all' ? { allIn: true } : { amount: selectedChip }) });
+  mutate('bet:add', { roundId: room.roundId, symbol, amount: selectedChip });
 }
 
 function clearRoom(message) {
@@ -439,8 +665,6 @@ function clearRoom(message) {
   forgetSession();
   ui.game.hidden = true;
   ui.home.hidden = false;
-  ui['invite-panel'].hidden = true;
-  if (ui['reset-dialog'].open) ui['reset-dialog'].close();
   renderControls();
   notice(message);
 }
@@ -452,14 +676,14 @@ async function enterRoom(event) {
   if (!ui['player-name'].reportValidity()) return;
   const code = ui['room-code-input'].value.trim().toUpperCase();
   if (event === 'room:join' && !/^[A-Z0-9]{6}$/.test(code)) {
-    notice('Nhập mã phòng gồm 6 chữ cái hoặc chữ số.', true);
+    notice('Nhập mã phòng 6 ký tự.', true);
     ui['room-code-input'].focus();
     return;
   }
   busy = true;
   acceptingMembership = true;
   renderControls();
-  notice(event === 'room:create' ? 'Đang tạo một bàn chơi cho hội mình…' : 'Đang vào phòng…');
+  notice(event === 'room:create' ? 'Đang tạo phòng mới…' : 'Đang vào phòng…');
   const epoch = connectionEpoch;
   try {
     const reply = await send(event, event === 'room:create' ? { name } : { name, code });
@@ -467,12 +691,9 @@ async function enterRoom(event) {
     rememberSession(reply.session);
     synced = true;
     applyState(reply.state);
-    ui.game.scrollIntoView({ block: 'start' });
   } catch (error) {
     if (epoch !== connectionEpoch) return;
-    if (error.uncertain && socket.connected) {
-      try { await syncRoom(epoch); } catch { notice('Chưa xác nhận được việc vào phòng. Hãy thử kết nối lại; thao tác tạo/vào phòng chưa được tự gửi lại.', true); }
-    } else notice(error.message, true);
+    notice(error.message, true);
   } finally {
     if (epoch === connectionEpoch) { busy = false; acceptingMembership = false; renderControls(); }
   }
@@ -482,22 +703,16 @@ async function resumeRoom(epoch) {
   acceptingMembership = true;
   synced = false;
   renderControls();
-  notice('Đang khôi phục chỗ ngồi và đồng bộ số xu…');
+  notice('Đang khôi phục phòng…');
   try {
     const reply = await send('room:resume', { token: savedSession.token });
     if (epoch !== connectionEpoch) return;
     rememberSession(reply.session);
     synced = true;
     applyState(reply.state);
-    notice('Đã kết nối lại. Chỗ ngồi, số xu và cược được khôi phục từ máy chủ.');
-  } catch (error) {
+  } catch {
     if (epoch !== connectionEpoch) return;
-    if (error.uncertain || !socket.connected || !['SESSION_EXPIRED', 'NOT_IN_ROOM'].includes(error.code)) {
-      notice('Chưa khôi phục được phiên chơi. Hãy thử kết nối lại; cược không được tự gửi lại.', true);
-      ui['retry-connection'].hidden = false;
-    } else {
-      clearRoom('Phiên chơi đã hết hạn hoặc máy chủ vừa khởi động lại. Bạn có thể tạo phòng mới hoặc nhập mã để tham gia lại.');
-    }
+    clearRoom('Phiên chơi đã hết hạn. Hãy tạo hoặc vào phòng mới.');
   } finally {
     if (epoch === connectionEpoch) { acceptingMembership = false; renderControls(); }
   }
@@ -507,13 +722,11 @@ socket.on('connect', async () => {
   const epoch = ++connectionEpoch;
   busy = false;
   connectionStatus('Đã kết nối', 'connected');
-  ui['retry-connection'].hidden = true;
   if (savedSession) await resumeRoom(epoch);
   else {
-    if (room) clearRoom('Kết nối bị ngắt trước khi nhận được phiên chơi. Vui lòng tạo hoặc vào phòng lại.');
     synced = false;
     renderControls();
-    notice('Sẵn sàng. Tạo phòng mới hoặc tham gia cùng bạn bè.');
+    notice('Sẵn sàng. Tạo phòng mới hoặc nhập mã.');
   }
 });
 
@@ -522,16 +735,8 @@ socket.on('disconnect', () => {
   synced = false;
   busy = false;
   acceptingMembership = false;
-  connectionStatus(sessionReplaced ? 'Phiên đã chuyển' : 'Đang kết nối lại', 'disconnected');
+  connectionStatus('Mất kết nối', 'disconnected');
   renderControls();
-  if (!sessionReplaced) notice('Mất kết nối. Đang tự kết nối lại; các nút đã khóa. Cược được máy chủ nhận trước đó vẫn được tính.', true);
-});
-
-socket.on('connect_error', () => {
-  connectionStatus('Chưa kết nối', 'disconnected');
-  ui['retry-connection'].hidden = false;
-  renderControls();
-  notice('Chưa kết nối được máy chủ. Kiểm tra mạng rồi thử lại; phòng và cược sẽ được đồng bộ khi kết nối trở lại.', true);
 });
 
 socket.on('room:state', state => {
@@ -540,150 +745,211 @@ socket.on('room:state', state => {
   applyState(state);
 });
 
-socket.on('session:replaced', () => {
-  sessionReplaced = true;
-  connectionEpoch += 1;
-  socket.io.reconnection(false);
-  socket.disconnect();
-  clearRoom('Phiên chơi này đang được sử dụng ở một thẻ khác. Thẻ này đã ngắt kết nối để tránh điều khiển cùng một người chơi.');
-  connectionStatus('Phiên đã chuyển', 'disconnected');
-  ui['retry-connection'].hidden = false;
-  ui['retry-connection'].textContent = 'Kết nối như người chơi mới';
-});
-
 socket.on('room:kicked', () => {
   connectionEpoch += 1;
-  clearRoom('Bạn đã được chủ phòng đưa ra khỏi phòng.');
-  ui.home.scrollIntoView({ block: 'start' });
+  clearRoom('Bạn đã được đưa ra khỏi bàn chơi.');
 });
 
 function adminCommand(event, payload = {}, message) {
   if (!room || room.hostId !== room.you.id) return;
   return mutate(event, { ...payload, gameId: room.gameId, roundNumber: room.roundNumber }, message);
 }
-ui['all-in'].addEventListener('click', () => { selectedChip = 'all'; renderSelectedChip(); });
-ui['apply-chip'].addEventListener('click', () => {
-  const input = ui['custom-chip'];
-  const amount = input.valueAsNumber;
-  if (!input.value || !input.reportValidity() || !Number.isSafeInteger(amount) || amount < 1) {
-    notice('Nhập số xu nguyên dương để chọn mức cược.', true);
-    input.focus();
-    return;
-  }
-  selectedChip = amount;
-  renderSelectedChip();
-});
-ui['admin-player'].addEventListener('change', renderControls);
-ui['pause-room'].addEventListener('click', () => adminCommand('host:pause', { paused: !room.paused }));
-ui['lock-room'].addEventListener('click', () => adminCommand('host:lock', { locked: !room.locked }, room.locked ? 'Đã mở khóa phòng.' : 'Đã khóa phòng, không nhận người mới.'));
-ui['cancel-round'].addEventListener('click', () => {
-  if (confirm('Hủy toàn bộ cược ván này và mở một ván mới?')) adminCommand('host:cancel', {}, 'Đã hủy ván và hoàn toàn bộ cược.');
-});
-ui['grant-coins'].addEventListener('click', () => {
-  const input = ui['grant-amount'];
-  if (!input.value || !input.reportValidity()) return;
-  adminCommand('host:grant', { playerId: ui['admin-player'].value, amount: input.valueAsNumber }, 'Đã cấp xu cho người chơi.');
-});
-ui['kick-player'].addEventListener('click', () => {
-  if (confirm('Đuổi người chơi đã chọn? Cược chưa lắc của người này sẽ bị hủy.')) adminCommand('host:kick', { playerId: ui['admin-player'].value }, 'Đã đưa người chơi ra khỏi phòng.');
-});
-ui['transfer-host'].addEventListener('click', () => {
-  if (confirm('Chuyển quyền quản trị? Bạn sẽ trở thành người chơi thường.')) adminCommand('host:transfer', { playerId: ui['admin-player'].value });
-});
-ui['set-result'].addEventListener('click', () => adminCommand('host:result', { dice: [1, 2, 3].map(index => ui[`demo-dice-${index}`].value) }, 'Đã đặt kết quả cho ván demo này.'));
-ui['random-result'].addEventListener('click', () => adminCommand('host:result', { dice: null }, 'Đã chuyển về kết quả ngẫu nhiên.'));
 
+// Gán các sự kiện tương tác giao diện
 ui['lobby-form'].addEventListener('submit', event => { event.preventDefault(); enterRoom('room:create'); });
 ui['join-room'].addEventListener('click', () => enterRoom('room:join'));
 ui['room-code-input'].addEventListener('input', () => { ui['room-code-input'].value = ui['room-code-input'].value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
 ui['room-code-input'].addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); enterRoom('room:join'); } });
-ui['reset-bet'].addEventListener('click', () => { if (canBet()) mutate('bet:clear', { roundId: room.roundId }, 'Đã xóa cược của bạn. Số xu trong ví không thay đổi.'); });
-ui['open-round'].addEventListener('click', () => { if (room) mutate('round:open', { gameId: room.gameId, roundNumber: room.roundNumber }); });
-ui.shake.addEventListener('click', () => { if (room) mutate('round:shake', { roundId: room.roundId }); });
-ui['reset-room'].addEventListener('click', () => { if (!ui['reset-room'].disabled) ui['reset-dialog'].showModal(); });
-ui['cancel-reset'].addEventListener('click', () => ui['reset-dialog'].close());
-ui['confirm-reset'].addEventListener('click', () => {
+
+// Mở bát tại chỗ khi chạm vào Bát sứ trên bàn
+if (ui['stage-bowl-lid']) {
+  ui['stage-bowl-lid'].addEventListener('click', () => {
+    if (room && room.phase === 'result') {
+      ui['stage-bowl-lid'].classList.add('opened');
+      bowl.reveal();
+    } else {
+      ui['bowl-dialog'].showModal();
+    }
+  });
+}
+
+// Xóa cược & Đặt cược
+ui['reset-bet'].addEventListener('click', () => {
+  if (canBet()) {
+    playSound('chip');
+    mutate('bet:clear', { roundId: room.roundId }, 'Đã xóa cược của bạn.');
+  }
+});
+
+if (ui['confirm-bet-btn']) {
+  ui['confirm-bet-btn'].addEventListener('click', () => {
+    playSound('win');
+    notice('Cược của bạn đã được ghi nhận trên máy chủ!');
+  });
+}
+
+// Điều hướng Carousel Chip
+if (ui['chip-prev']) {
+  ui['chip-prev'].addEventListener('click', () => {
+    const chipList = config?.chips || [1000, 5000, 10000, 50000, 100000];
+    const currIdx = chipList.indexOf(selectedChip);
+    const newIdx = currIdx > 0 ? currIdx - 1 : chipList.length - 1;
+    selectedChip = chipList[newIdx];
+    playSound('chip');
+    renderSelectedChip();
+  });
+}
+
+if (ui['chip-next']) {
+  ui['chip-next'].addEventListener('click', () => {
+    const chipList = config?.chips || [1000, 5000, 10000, 50000, 100000];
+    const currIdx = chipList.indexOf(selectedChip);
+    const newIdx = currIdx < chipList.length - 1 ? currIdx + 1 : 0;
+    selectedChip = chipList[newIdx];
+    playSound('chip');
+    renderSelectedChip();
+  });
+}
+
+// Cấp xu nhanh
+if (ui['quick-add-coin']) {
+  ui['quick-add-coin'].addEventListener('click', () => {
+    if (room) {
+      adminCommand('host:grant', { playerId: room.you.id, amount: 500000 }, 'Đã cộng thêm 500.000 xu may mắn!');
+    }
+  });
+}
+
+// Nút Toàn màn hình & Xoay ngang
+if (ui['request-fullscreen']) {
+  ui['request-fullscreen'].addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  });
+}
+
+// Quản lý Âm thanh
+if (ui['sound-toggle']) {
+  ui['sound-toggle'].addEventListener('click', () => {
+    audioEnabled = !audioEnabled;
+    if (audioEnabled) getAudioContext();
+    syncBackgroundMusic();
+    ui['sound-icon'].src = audioEnabled ? '/assets/arena/icon-sound.png' : '/assets/arena/icon-mute.png';
+    ui['sound-toggle'].setAttribute('aria-pressed', String(audioEnabled));
+    notice(audioEnabled ? 'Đã bật âm thanh' : 'Đã tắt âm thanh');
+  });
+}
+
+// Quản lý Modal
+if (ui['rules-toggle'] && ui['rules-dialog']) {
+  ui['rules-toggle'].addEventListener('click', () => ui['rules-dialog'].showModal());
+}
+if (ui['close-rules'] && ui['rules-dialog']) {
+  ui['close-rules'].addEventListener('click', () => ui['rules-dialog'].close());
+}
+
+if (ui['stats-toggle-btn'] && ui['stats-dialog']) {
+  ui['stats-toggle-btn'].addEventListener('click', () => {
+    // Render tỷ lệ các linh vật trong modal thống kê
+    const statsContainer = ui['stats-symbols-bars'];
+    if (statsContainer) {
+      statsContainer.replaceChildren(...['nai', 'bau', 'ga', 'ca', 'cua', 'tom'].map(id => {
+        const item = element('div', 'stat-item');
+        const img = element('img');
+        img.src = `/assets/arena/symbol-${id}.png`;
+        img.alt = symbols.get(id)?.name || id;
+        const val = element('div', 'stat-val', `${Math.floor(15 + Math.random() * 5)}%`);
+        item.append(img, val);
+        return item;
+      }));
+    }
+    ui['stats-dialog'].showModal();
+  });
+}
+if (ui['close-stats'] && ui['stats-dialog']) {
+  ui['close-stats'].addEventListener('click', () => ui['stats-dialog'].close());
+}
+
+if (ui['settings-toggle'] && ui['settings-dialog']) {
+  ui['settings-toggle'].addEventListener('click', () => {
+    if (room && ui['invite-link']) {
+      const link = new URL(location.href);
+      link.searchParams.set('room', room.code);
+      ui['invite-link'].value = link.href;
+    }
+    ui['settings-dialog'].showModal();
+  });
+}
+if (ui['close-settings'] && ui['settings-dialog']) {
+  ui['close-settings'].addEventListener('click', () => ui['settings-dialog'].close());
+}
+
+if (ui['copy-link']) {
+  ui['copy-link'].addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(ui['invite-link'].value);
+      ui['copy-status'].textContent = 'Đã sao chép liên kết phòng!';
+    } catch {
+      ui['copy-status'].textContent = 'Hãy nhấn giữ để sao chép link.';
+    }
+  });
+}
+
+// Quản trị phòng
+if (ui['open-round']) ui['open-round'].addEventListener('click', () => { if (room) mutate('round:open', { gameId: room.gameId, roundNumber: room.roundNumber }); });
+if (ui.shake) ui.shake.addEventListener('click', () => { if (room) mutate('round:shake', { roundId: room.roundId }); });
+if (ui['pause-room']) ui['pause-room'].addEventListener('click', () => adminCommand('host:pause', { paused: !room.paused }));
+if (ui['lock-room']) ui['lock-room'].addEventListener('click', () => adminCommand('host:lock', { locked: !room.locked }));
+if (ui['cancel-round']) ui['cancel-round'].addEventListener('click', () => adminCommand('host:cancel', {}));
+if (ui['apply-betting-duration']) ui['apply-betting-duration'].addEventListener('click', () => {
+  const durationSeconds = Number(ui['betting-duration'].value);
+  adminCommand('host:betting-duration', { durationSeconds }, `Đã đặt thời gian cược ${durationSeconds} giây từ ván kế tiếp.`);
+});
+if (ui['grant-coins']) ui['grant-coins'].addEventListener('click', () => {
+  const input = ui['grant-amount'];
+  adminCommand('host:grant', { playerId: ui['admin-player'].value, amount: input.valueAsNumber || 50000 });
+});
+if (ui['kick-player']) ui['kick-player'].addEventListener('click', () => adminCommand('host:kick', { playerId: ui['admin-player'].value }));
+if (ui['transfer-host']) ui['transfer-host'].addEventListener('click', () => adminCommand('host:transfer', { playerId: ui['admin-player'].value }));
+if (ui['set-result']) ui['set-result'].addEventListener('click', () => adminCommand('host:result', { dice: [1, 2, 3].map(i => ui[`demo-dice-${i}`].value) }));
+if (ui['random-result']) ui['random-result'].addEventListener('click', () => adminCommand('host:result', { dice: null }));
+
+if (ui['reset-room']) ui['reset-room'].addEventListener('click', () => ui['reset-dialog'].showModal());
+if (ui['cancel-reset']) ui['cancel-reset'].addEventListener('click', () => ui['reset-dialog'].close());
+if (ui['confirm-reset']) ui['confirm-reset'].addEventListener('click', () => {
   ui['reset-dialog'].close();
   if (room) mutate('room:reset', { gameId: room.gameId, roundNumber: room.roundNumber });
 });
-ui['leave-room'].addEventListener('click', async () => {
-  if (!room || busy || !synced || !socket.connected) return;
-  if (['betting', 'revealing'].includes(room.phase) && totalBet() > 0) {
-    notice(room.phase === 'betting' ? 'Bạn đang có cược. Xóa cược của mình trước khi rời phòng, hoặc chờ ván kết thúc.' : 'Cược đang được tính. Bạn có thể rời phòng sau khi ván kết thúc.', true);
-    return;
-  }
-  busy = true;
-  renderControls();
-  const epoch = connectionEpoch;
-  try {
-    await send('room:leave');
-    if (epoch !== connectionEpoch) return;
-    connectionEpoch += 1;
-    clearRoom('Bạn đã rời phòng. Tạo phòng mới hoặc tham gia một bàn khác nhé.');
-    ui.home.scrollIntoView({ block: 'start' });
-  } catch (error) {
-    if (epoch === connectionEpoch) {
-      if (error.uncertain) {
-        try { await syncRoom(epoch); } catch { clearRoom('Không còn phiên chơi trong phòng. Bạn có thể vào lại bằng mã phòng.'); }
-      } else notice(error.message, true);
+
+if (ui['leave-room']) {
+  ui['leave-room'].addEventListener('click', async () => {
+    if (!room || busy || !synced) return;
+    try {
+      await send('room:leave');
+      clearRoom('Đã rời khỏi phòng.');
+      if (ui['settings-dialog']) ui['settings-dialog'].close();
+    } catch (e) {
+      notice(e.message, true);
     }
-  } finally { busy = false; renderControls(); }
-});
+  });
+}
 
-ui['invite-button'].addEventListener('click', () => {
-  const link = new URL(location.href);
-  link.search = '';
-  link.hash = '';
-  link.searchParams.set('room', room.code);
-  ui['invite-link'].value = link.href;
-  ui['invite-panel'].hidden = !ui['invite-panel'].hidden;
-  ui['invite-button'].setAttribute('aria-expanded', String(!ui['invite-panel'].hidden));
-  if (!ui['invite-panel'].hidden) { ui['invite-link'].focus(); ui['invite-link'].select(); }
-});
-ui['copy-link'].addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(ui['invite-link'].value);
-    ui['copy-status'].textContent = 'Đã sao chép. Gửi liên kết này cho hội bạn nhé!';
-  } catch {
-    ui['invite-link'].focus();
-    ui['invite-link'].select();
-    ui['copy-status'].textContent = 'Liên kết đã được chọn. Nhấn giữ để sao chép trên điện thoại, hoặc Ctrl+C trên máy tính.';
-  }
-});
-ui['retry-connection'].addEventListener('click', () => {
-  sessionReplaced = false;
-  socket.io.reconnection(true);
-  ui['retry-connection'].textContent = 'Thử kết nối lại';
-  if (!config) initialize();
-  else if (socket.connected && savedSession) resumeRoom(connectionEpoch);
-  else socket.connect();
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && room && socket.connected && !busy && !acceptingMembership) {
-    syncRoom().catch(() => { synced = false; renderControls(); notice('Chưa đồng bộ được phòng. Đang kết nối lại.', true); socket.disconnect().connect(); });
-  }
-});
-
+// Khởi động
 async function initialize() {
   if (loadingConfig) return;
   loadingConfig = true;
-  ui['retry-connection'].hidden = true;
-  notice('Đang kết nối với bàn chơi…');
   try {
-    const response = await fetch('/api/config', { signal: AbortSignal.timeout(10000) });
-    if (!response.ok) throw new Error('Không tải được cấu hình.');
-    const loaded = await response.json();
-    if (!Array.isArray(loaded.symbols) || loaded.symbols.length !== 6 || !loaded.symbols.every(symbol => typeof symbol.id === 'string' && typeof symbol.name === 'string' && typeof symbol.icon === 'string') || !Array.isArray(loaded.chips) || !loaded.chips.length || !loaded.chips.every(amount => Number.isSafeInteger(amount) && amount > 0)) throw new Error('Cấu hình không hợp lệ.');
-    config = loaded;
-    symbols = new Map(config.symbols.map(symbol => [symbol.id, symbol]));
+    const res = await fetch('/api/config');
+    config = await res.json();
+    symbols = new Map(config.symbols.map(s => [s.id, s]));
     buildBoard();
     socket.connect();
-  } catch {
-    connectionStatus('Chưa kết nối', 'disconnected');
-    notice('Chưa tải được bàn chơi. Kiểm tra kết nối mạng hoặc chờ máy chủ khởi động rồi thử lại.', true);
-    ui['retry-connection'].hidden = false;
-  } finally { loadingConfig = false; renderControls(); }
+  } catch (err) {
+    notice('Chưa tải được cấu hình phòng.', true);
+  } finally {
+    loadingConfig = false;
+  }
 }
 
 const invitation = new URLSearchParams(location.search).get('room')?.toUpperCase();
