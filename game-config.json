@@ -1,10 +1,13 @@
 {
   "initialBalance": 100000,
+  "balanceMode": "available",
   "chips": [
-    10,
-    50,
-    100,
-    500
+    1000,
+    5000,
+    10000,
+    50000,
+    100000,
+    500000
   ],
   "symbols": [
     {

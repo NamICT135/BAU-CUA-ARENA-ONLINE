@@ -8,7 +8,15 @@ const sessionKey = 'bau-cua-arena-session';
 const socket = io({ autoConnect: false, reconnection: true, reconnectionDelay: 700, reconnectionDelayMax: 4000 });
 const number = value => Number(value).toLocaleString('vi-VN');
 const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
-const DEFAULT_CHIPS = [1000, 5000, 10000, 50000, 100000];
+const DEFAULT_CHIPS = [1000, 5000, 10000, 50000, 100000, 500000];
+const CHIP_ASSET_NAMES = Object.freeze({
+  1000: '1k',
+  5000: '5k',
+  10000: '10k',
+  50000: '50k',
+  100000: '100k',
+  500000: '500k',
+});
 
 // Định dạng tiền gọn gàng như sòng bài (vd: 56.2M, 1.5M, 100K)
 function formatCompactCoins(num) {
@@ -21,7 +29,10 @@ function formatCompactCoins(num) {
 }
 
 function bettingChipValues() {
-  return config?.chips?.length === 5 ? config.chips : DEFAULT_CHIPS;
+  const configured = Array.isArray(config?.chips)
+    ? config.chips.filter(value => Object.hasOwn(CHIP_ASSET_NAMES, value))
+    : [];
+  return configured.length > 0 ? configured : DEFAULT_CHIPS;
 }
 
 let config = null;
@@ -43,7 +54,7 @@ let audioCtx = null;
 const backgroundMusic = ui['background-music'];
 
 if (backgroundMusic) {
-  backgroundMusic.volume = 0.18;
+  backgroundMusic.volume = 0.8;
   backgroundMusic.loop = true;
 }
 
@@ -196,6 +207,14 @@ function totalBet() {
   return room ? Object.values(room.you.bets).reduce((sum, value) => sum + value, 0) : 0;
 }
 
+// Máy chủ mới gửi số dư khả dụng đã trừ cược. Với máy chủ cũ đang chạy,
+// giao diện tự trừ tổng cược để người chơi vẫn thấy ví cập nhật ngay lập tức.
+function availableBalance() {
+  if (!room) return 0;
+  const reservedByLegacyServer = config?.balanceMode === 'available' ? 0 : totalBet();
+  return Math.max(0, room.you.balance - reservedByLegacyServer);
+}
+
 function renderControls() {
   const ready = Boolean(config && socket.connected && !busy && !acceptingMembership && !sessionReplaced);
   ui['create-room'].disabled = !ready;
@@ -246,14 +265,7 @@ function renderSelectedChip() {
 }
 
 function chipAssetName(amount) {
-  const tiers = [
-    [100000, '100k'],
-    [50000, '50k'],
-    [10000, '10k'],
-    [5000, '5k'],
-    [1000, '1k'],
-  ];
-  return tiers.find(([value]) => amount >= value)?.[1] || '1k';
+  return CHIP_ASSET_NAMES[amount] || '1k';
 }
 
 function renderPlacedChips(container, amount) {
@@ -326,18 +338,16 @@ function buildBoard() {
     symbolViews.set(symbol.id, { button: spot, amount: myBet, total: boardTotal, chips: placedChips });
   }
 
-  // 5 Mức Chip: 1K (1000), 5K (5000), 10K (10000), 50K (50000), 100K (100000)
+  // 6 mức chip: 1K, 5K, 10K, 50K, 100K, 500K; ALL IN luôn đứng cuối.
   const chipList = bettingChipValues();
-  const chipFileNames = ['1k', '5k', '10k', '50k', '100k'];
-
-  chipList.forEach((amount, idx) => {
+  chipList.forEach((amount) => {
     const chipBtn = element('button', 'chip-slot-btn');
     chipBtn.type = 'button';
     chipBtn.dataset.chip = String(amount);
     chipBtn.setAttribute('aria-label', `Chip ${formatCompactCoins(amount)} xu`);
 
     const img = element('img');
-    img.src = `/assets/arena/chip-${chipFileNames[idx] || '10k'}.png`;
+    img.src = `/assets/arena/chip-${chipAssetName(amount)}.png`;
     img.alt = formatCompactCoins(amount);
     img.draggable = false;
 
@@ -406,7 +416,9 @@ function applyState(next) {
   };
   if (ui['round-phase-label']) ui['round-phase-label'].textContent = phaseNames[room.phase] || 'ĐANG LẮC BẦU...';
 
-  ui['balance'].textContent = covered ? '•••' : number(room.you.balance);
+  const spendableBalance = availableBalance();
+  ui['balance'].textContent = covered ? '•••' : number(spendableBalance);
+  if (ui['available-balance']) ui['available-balance'].textContent = number(spendableBalance);
   ui['total-bet'].textContent = number(totalBet());
 
   // Cập nhật trạng thái từng ô cược
@@ -422,40 +434,9 @@ function applyState(next) {
     view.button.classList.toggle('is-winner', isWin);
   }
 
-  // Xúc xắc & Bát sứ trung tâm
+  // Hiệu ứng lắc được trình bày trong lớp mở bát toàn màn hình.
   const isShaking = room.phase === 'revealing';
-  const showShakeKit = isShaking || room.phase === 'result';
-  ui['dice-area'].classList.toggle('shaking', isShaking);
-  ui['dice-area'].classList.toggle('is-idle', !showShakeKit);
-  if (isShaking) playSound('shake');
-
-  const stageBowl = ui['stage-bowl-lid'];
-  const revealDice = room.phase === 'result' && !covered;
-  if (stageBowl) {
-    stageBowl.hidden = !showShakeKit;
-    if (revealDice) {
-      stageBowl.classList.add('opened');
-    } else {
-      stageBowl.classList.remove('opened');
-    }
-  }
-  if (ui['dice-3d-preview']) ui['dice-3d-preview'].hidden = !showShakeKit || revealDice;
-  if (ui['dice-trio']) ui['dice-trio'].hidden = !revealDice;
-
-  // Cập nhật 3 viên xúc xắc
-  for (let index = 0; index < 3; index += 1) {
-    const symbolId = room.dice[index];
-    const symbol = (room.phase === 'result' && !covered) ? symbols.get(symbolId) : null;
-    const dieEl = ui[`dice-${index + 1}`];
-    if (dieEl) {
-      dieEl.replaceChildren();
-      if (symbol) {
-        dieEl.append(createDiceFace(symbol.id));
-      } else {
-        dieEl.append(element('span', 'dice-mark', '?'));
-      }
-    }
-  }
+  if (isShaking && previous?.phase !== 'revealing') playSound('shake');
 
   if (room.phase === 'result' && !covered && !previous?.resultHandled) {
     playSound('win');
@@ -513,7 +494,7 @@ function renderPlayers() {
   const realPlayers = room.players.map((p, idx) => ({
     name: p.name,
     vip: Math.max(1, 8 - idx),
-    balance: p.balance,
+    balance: config?.balanceMode === 'available' ? p.balance : Math.max(0, p.balance - (p.betTotal || 0)),
     avatar: `/assets/arena/symbol-${['ca', 'cua', 'ga', 'nai', 'tom', 'bau'][idx % 6]}.png`,
     isMe: p.id === room.you.id,
     connected: p.connected,
@@ -655,16 +636,16 @@ async function mutate(event, payload, successMessage) {
 
 function placeBet(symbol) {
   if (!canBet()) return;
-  const outstanding = totalBet();
+  const spendableBalance = availableBalance();
   if (selectedChip === 'all') {
-    if (room.you.balance - outstanding <= 0) {
+    if (spendableBalance <= 0) {
       notice(`Bạn không còn xu khả dụng để cược ALL IN.`, true);
       return;
     }
     mutate('bet:add', { roundId: room.roundId, symbol, allIn: true });
     return;
   }
-  if (selectedChip > room.you.balance - outstanding) {
+  if (selectedChip > spendableBalance) {
     notice(`Số xu còn lại không đủ để đặt mức này.`, true);
     return;
   }
@@ -746,6 +727,13 @@ socket.on('connect', async () => {
   }
 });
 
+socket.on('connect_error', () => {
+  busy = false;
+  acceptingMembership = false;
+  renderControls();
+  notice('Không thể kết nối máy chủ. Nếu đang dùng điện thoại, hãy mở bằng địa chỉ mạng nội bộ và khởi động lại server.', true);
+});
+
 socket.on('disconnect', () => {
   connectionEpoch += 1;
   synced = false;
@@ -776,18 +764,6 @@ ui['lobby-form'].addEventListener('submit', event => { event.preventDefault(); e
 ui['join-room'].addEventListener('click', () => enterRoom('room:join'));
 ui['room-code-input'].addEventListener('input', () => { ui['room-code-input'].value = ui['room-code-input'].value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
 ui['room-code-input'].addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); enterRoom('room:join'); } });
-
-// Mở bát tại chỗ khi chạm vào Bát sứ trên bàn
-if (ui['stage-bowl-lid']) {
-  ui['stage-bowl-lid'].addEventListener('click', () => {
-    if (room && room.phase === 'result') {
-      ui['stage-bowl-lid'].classList.add('opened');
-      bowl.reveal();
-    } else {
-      ui['bowl-dialog'].showModal();
-    }
-  });
-}
 
 // Xóa cược & Đặt cược
 ui['reset-bet'].addEventListener('click', () => {
@@ -845,14 +821,114 @@ if (ui['quick-add-coin']) {
   });
 }
 
-// Nút Toàn màn hình & Xoay ngang
-if (ui['request-fullscreen']) {
-  ui['request-fullscreen'].addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => { });
-    }
-  });
+// Toàn màn hình & xoay ngang, gồm fallback cho Safari/Chrome/Firefox trên iPhone.
+const fullscreenButtons = [ui['request-fullscreen'], ui['fullscreen-toggle']].filter(Boolean);
+const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandaloneDisplay = () => window.matchMedia('(display-mode: standalone)').matches ||
+  window.matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+const currentFullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement ||
+  document.webkitCurrentFullScreenElement;
+
+function syncFullscreenControls() {
+  if (isStandaloneDisplay()) document.body.classList.add('fullscreen-fit');
+  const active = Boolean(currentFullscreenElement() || isStandaloneDisplay() ||
+    document.body.classList.contains('fullscreen-fit'));
+  for (const button of fullscreenButtons) button.setAttribute('aria-pressed', String(active));
 }
+
+function syncAppViewport() {
+  const viewport = window.visualViewport;
+  const width = Math.round(viewport?.width || document.documentElement.clientWidth || window.innerWidth);
+  const height = Math.round(viewport?.height || document.documentElement.clientHeight || window.innerHeight);
+  document.documentElement.style.setProperty('--app-viewport-width', `${width}px`);
+  document.documentElement.style.setProperty('--app-viewport-height', `${height}px`);
+}
+
+async function exitGameFullscreen() {
+  document.body.classList.remove('force-landscape', 'fullscreen-fit');
+  delete document.body.dataset.nativeFullscreen;
+  try { screen.orientation?.unlock?.(); } catch { /* Safari có thể không hỗ trợ unlock. */ }
+  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen;
+  if (currentFullscreenElement() && exit) {
+    try { await exit.call(document); } catch { /* Giữ giao diện hiện tại nếu Safari từ chối. */ }
+  }
+  syncFullscreenControls();
+}
+
+async function enterGameFullscreen() {
+  document.body.classList.add('fullscreen-fit');
+  let nativeFullscreen = Boolean(currentFullscreenElement() || isStandaloneDisplay());
+  const root = document.documentElement;
+  const request = root.requestFullscreen || root.webkitRequestFullscreen || root.webkitRequestFullScreen;
+
+  if (!nativeFullscreen && request) {
+    try {
+      const result = root.requestFullscreen
+        ? request.call(root, { navigationUI: 'hide' })
+        : request.call(root);
+      if (result?.then) await result;
+      nativeFullscreen = true;
+      document.body.dataset.nativeFullscreen = 'true';
+    } catch {
+      nativeFullscreen = false;
+    }
+  }
+
+  let orientationLocked = false;
+  if (screen.orientation?.lock && (nativeFullscreen || isStandaloneDisplay())) {
+    try {
+      await screen.orientation.lock('landscape');
+      orientationLocked = true;
+    } catch { /* iPhone Safari thường không cho khóa hướng. */ }
+  }
+
+  if (!orientationLocked && window.matchMedia('(orientation: portrait)').matches) {
+    document.body.classList.add('force-landscape');
+  }
+
+  if (!nativeFullscreen && isIOSDevice) {
+    notice('Đã bật chế độ ngang tương thích. Muốn ẩn hoàn toàn thanh Safari: Chia sẻ → Thêm vào Màn hình chính.');
+  } else {
+    notice('Đã bật toàn màn hình và chế độ ngang.');
+  }
+  syncAppViewport();
+  syncFullscreenControls();
+}
+
+async function toggleGameFullscreen() {
+  const fallbackActive = document.body.classList.contains('fullscreen-fit');
+  if (currentFullscreenElement() || fallbackActive) await exitGameFullscreen();
+  else await enterGameFullscreen();
+}
+
+for (const button of fullscreenButtons) button.addEventListener('click', toggleGameFullscreen);
+
+function handleFullscreenChange() {
+  if (!currentFullscreenElement() && !isStandaloneDisplay() && document.body.dataset.nativeFullscreen === 'true') {
+    document.body.classList.remove('force-landscape', 'fullscreen-fit');
+    delete document.body.dataset.nativeFullscreen;
+  }
+  syncAppViewport();
+  syncFullscreenControls();
+}
+
+for (const eventName of ['fullscreenchange', 'webkitfullscreenchange']) {
+  document.addEventListener(eventName, handleFullscreenChange);
+}
+
+function handleViewportOrientationChange() {
+  if (window.matchMedia('(orientation: landscape)').matches) document.body.classList.remove('force-landscape');
+  syncAppViewport();
+  syncFullscreenControls();
+}
+
+window.addEventListener('orientationchange', handleViewportOrientationChange);
+window.addEventListener('resize', handleViewportOrientationChange, { passive: true });
+window.visualViewport?.addEventListener('resize', handleViewportOrientationChange, { passive: true });
+
+syncAppViewport();
+syncFullscreenControls();
 
 // Quản lý Âm thanh
 if (ui['sound-toggle']) {

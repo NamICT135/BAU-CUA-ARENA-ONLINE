@@ -34,7 +34,8 @@ test('default room opens immediately with 30 seconds; new arrivals can bet', t =
   assert.equal(joined.state.you.eligible, true);
   assert.equal(cmd('bet:add', { symbol: 'cua', amount: 37 }, 'guest').ok, true);
   const allIn = cmd('bet:add', { symbol: 'bau', allIn: true }, 'guest');
-  assert.equal(allIn.state.you.bets.bau, 963);
+  assert.equal(allIn.state.you.bets.bau, config.initialBalance - 37);
+  assert.equal(allIn.state.you.balance, 0);
   assert.equal(cmd('bet:add', { symbol: 'bau', allIn: true }, 'guest').ok, false);
 });
 
@@ -43,7 +44,7 @@ test('automatic round settles once, including an empty round, and starts the nex
   assert.equal(cmd('bet:add', { symbol: 'cua', amount: 100 }, 'guest').ok, true);
   await until(() => room.phase === 'result');
   assert.equal(room.history.length, 1);
-  assert.equal(room.history[0].results[0].balance, 1300);
+  assert.equal(room.history[0].results[0].balance, config.initialBalance + 300);
   await until(() => room.roundNumber === 2);
   assert.equal(room.phase, 'betting');
   await until(() => room.history.length === 2);
@@ -83,7 +84,7 @@ test('host authorization, grants with dedupe, locked joins, kick revokes session
   const grant = { playerId: joined.session.playerId, amount: 125, requestId: 'grant-once' };
   assert.equal(cmd('host:grant', grant).ok, true);
   assert.equal(cmd('host:grant', grant).ok, true);
-  assert.equal(room.players.get(joined.session.playerId).balance, 1125);
+  assert.equal(room.players.get(joined.session.playerId).balance, config.initialBalance + 125);
   for (const amount of [0, -1, 0.5, '100', 1e20]) assert.equal(cmd('host:grant', { ...grant, requestId: `bad-${amount}`, amount }).ok, false);
   cmd('host:lock', { locked: true });
   assert.equal(game.handle('new', 'room:join', { name: 'Người mới', code: room.code }).error.code, 'ROOM_LOCKED');
@@ -133,14 +134,14 @@ test('demo is per round, private selection only goes to host, cancel releases be
   assert.equal(room.history[0].demo, true);
   assert.equal(game.handle('guest', 'room:sync', {}).state.history[0].demo, undefined);
   assert.equal(game.handle('host', 'room:sync', {}).state.history[0].demo, true);
-  assert.equal(room.players.get(joined.session.playerId).balance, 1200);
+  assert.equal(room.players.get(joined.session.playerId).balance, config.initialBalance + 200);
   cmd('round:open');
   assert.equal(room.forcedDice, null);
   cmd('bet:add', { symbol: 'cua', amount: 123 }, 'guest');
   assert.equal(cmd('host:cancel').ok, true);
   const state = game.handle('guest', 'room:sync', {}).state;
   assert.equal(state.you.bets.cua, 0);
-  assert.equal(state.you.balance, 1200);
+  assert.equal(state.you.balance, config.initialBalance + 200);
 });
 
 test('room expiry and close remove automatic timers even when rounds update timestamps', async t => {

@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { io } from 'socket.io-client';
 import { createGameServer } from '../server.js';
+
+const config = JSON.parse(await readFile(new URL('../game-config.json', import.meta.url), 'utf8'));
 
 async function setup(t, options = {}) {
   const app = await createGameServer({ autoStart: false, revealMs: 35, hostGraceMs: 60, ...options });
@@ -78,7 +81,7 @@ test('20 connected players share one authoritative round; a 21st cannot join', {
     assert.deepEqual(socket.snapshot.dice, final.dice);
     const matches = final.dice.filter(symbol => symbol === symbols[index % 6]).length;
     const expectedReturn = matches ? 50 * (matches + 1) : 0;
-    assert.equal(socket.snapshot.you.balance, 950 + expectedReturn);
+    assert.equal(socket.snapshot.you.balance, config.initialBalance - 50 + expectedReturn);
     assert.equal(socket.snapshot.you.stats.gamesPlayed, 1);
     assert.equal(socket.snapshot.you.lastResult.totalReturn, expectedReturn);
     assert.ok(socket.snapshot.players.every(player => !Object.hasOwn(player, 'token') && !Object.hasOwn(player, 'bets')));
@@ -99,14 +102,15 @@ test('server rejects forged amounts, over-balance, duplicate and stale mutations
     const result = await command(host, 'bet:add', payload === null ? null : mutation({ roundId, ...payload }));
     assert.equal(result.ok, false);
   }
-  const bet = mutation({ roundId, symbol: 'cua', amount: 500 });
+  const halfBalance = Math.floor(config.initialBalance / 2);
+  const bet = mutation({ roundId, symbol: 'cua', amount: halfBalance });
   await success(host, 'bet:add', bet);
   const duplicate = await success(host, 'bet:add', bet);
-  assert.equal(duplicate.state.you.bets.cua, 500);
-  await success(host, 'bet:add', mutation({ roundId, symbol: 'tom', amount: 500 }));
+  assert.equal(duplicate.state.you.bets.cua, halfBalance);
+  await success(host, 'bet:add', mutation({ roundId, symbol: 'tom', amount: config.initialBalance - halfBalance }));
   assert.equal((await command(host, 'bet:add', mutation({ roundId, symbol: 'ca', amount: 10 }))).ok, false);
   const before = await success(host, 'room:sync');
-  assert.equal(before.state.you.balance, 1000);
+  assert.equal(before.state.you.balance, 0);
   assert.equal((await command(host, 'room:leave')).ok, false);
   const shake = mutation({ roundId });
   await success(host, 'round:shake', shake);
@@ -159,7 +163,7 @@ test('late join waits, rooms stay separate, resume preserves identity and accept
   const reset = await success(currentHost, 'room:reset', mutation({ roundNumber: 1 }));
   assert.equal(reset.state.phase, 'waiting');
   assert.equal(reset.state.history.length, 0);
-  assert.ok(reset.state.players.every(player => player.balance === 1000));
+  assert.ok(reset.state.players.every(player => player.balance === config.initialBalance));
   assert.notEqual(reset.state.gameId, room.state.gameId);
   const stale = await command(currentHost, 'round:open', mutation({ gameId: room.state.gameId, roundNumber: 0 }));
   assert.equal(stale.ok, false);

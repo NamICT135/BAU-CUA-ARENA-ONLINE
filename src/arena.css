@@ -1,5 +1,5 @@
 /* ===================================================================
-   BẦU CUA HOÀNG GIA — GIAO DIỆN CHUẨN 16:9 & MOBILE LANDSCAPE
+   BẦU CUA HOÀNG GIA — GIAO DIỆN TOÀN MÀN HÌNH THÍCH ỨNG
    =================================================================== */
 
 :root {
@@ -11,6 +11,10 @@
   --green-felt: #0b5c46;
   --panel-bg: rgba(28, 16, 12, 0.94);
   --border-gold: #c99b4a;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 *,
@@ -27,7 +31,7 @@ body {
   height: 100%;
   overflow: hidden;
   background: #090302;
-  font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+  font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
   user-select: none;
   -webkit-user-select: none;
   color: #ffeed0;
@@ -117,7 +121,7 @@ body {
 }
 
 .rotate-card h2 {
-  font-family: 'Cinzel', serif;
+  font-family: 'Be Vietnam Pro', sans-serif;
   font-size: 18px;
   color: #ffd875;
   margin: 0 0 10px;
@@ -140,17 +144,26 @@ body {
   border: 1px solid #ffe391;
   border-radius: 30px;
   cursor: pointer;
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
 }
 
 /* ===================================================================
-   2. KHUNG CHÍNH CHUẨN TỈ LỆ 16:9
+   2. KHUNG CHÍNH: CỬA SỔ GIỮ 16:9, TOÀN MÀN HÌNH PHỦ KÍN
    =================================================================== */
 .arcade-viewport {
+  --stage-available-width: var(--app-viewport-width, 100dvw);
+  --stage-available-height: var(--app-viewport-height, 100dvh);
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
+  width: 100dvw;
+  height: 100dvh;
+  width: var(--app-viewport-width, 100dvw);
+  height: var(--app-viewport-height, 100dvh);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,17 +171,76 @@ body {
   overflow: hidden;
 }
 
+/* Fill ultrawide screens without stretching the interactive 16:9 stage. */
+.arcade-viewport::before {
+  content: '';
+  position: absolute;
+  inset: -28px;
+  z-index: 0;
+  background: url('/assets/arena/background-complete1.png') center / cover no-repeat;
+  filter: blur(18px) brightness(0.42) saturate(0.8);
+  transform: scale(1.06);
+  pointer-events: none;
+}
+
+.circle-btn svg {
+  width: 54%;
+  height: 54%;
+  fill: none;
+  stroke: #ffdf9e;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* Safari iPhone cũ không có Fullscreen/Orientation Lock cho phần tử HTML.
+   Khi đó xoay toàn bộ vùng nhìn bằng CSS và vẫn phủ kín màn hình. */
+@media (orientation: portrait) and (max-width: 950px) {
+  body.force-landscape .rotate-prompt {
+    display: none !important;
+  }
+
+  body.force-landscape .arcade-viewport {
+    --stage-available-width: var(--app-viewport-height, 100dvh);
+    --stage-available-height: var(--app-viewport-width, 100dvw);
+    inset: auto;
+    left: 50%;
+    top: 50%;
+    width: var(--app-viewport-height, 100dvh);
+    height: var(--app-viewport-width, 100dvw);
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center;
+  }
+
+}
+
 .arcade-stage {
   position: relative;
+  z-index: 1;
   container-type: size;
   aspect-ratio: 16 / 9;
-  width: min(100vw, calc(100vh * 16 / 9));
-  height: min(100vh, calc(100vw * 9 / 16));
-  max-width: 100vw;
-  max-height: 100vh;
-  background: url('/assets/arena/background-complete.png') center center / 100% 100% no-repeat;
+  width: min(100%, calc(var(--stage-available-height) * 16 / 9));
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  background: url('/assets/arena/background-complete1.png') center center / 100% 100% no-repeat;
   box-shadow: 0 0 70px rgba(0, 0, 0, 0.95), 0 0 140px rgba(185, 30, 20, 0.25);
   overflow: hidden;
+}
+
+/* Chỉ kéo sân chơi phủ kín mọi tỷ lệ màn hình sau khi người chơi yêu cầu
+   toàn màn hình. Các điểm cược vẫn dùng phần trăm nên tiếp tục khớp nền. */
+body.fullscreen-fit .arcade-stage,
+:fullscreen .arcade-stage,
+:-webkit-full-screen .arcade-stage {
+  aspect-ratio: 16 / 9;
+  width: min(100%, calc(var(--stage-available-height) * 16 / 9));
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 /* ===================================================================
@@ -196,13 +268,15 @@ body {
 }
 
 .lobby-logo {
-  max-width: 260px;
+  width: min(70vw, 260px);
+  max-height: 20dvh;
   height: auto;
+  object-fit: contain;
   filter: drop-shadow(0 4px 14px rgba(255, 200, 80, 0.4));
 }
 
 .lobby-tagline {
-  font-family: 'Cinzel', serif;
+  font-family: 'Be Vietnam Pro', sans-serif;
   font-size: 11px;
   letter-spacing: 3px;
   color: #ffda82;
@@ -250,7 +324,7 @@ body {
   border: 1px solid #ffe9ad;
   border-radius: 12px;
   color: #2b1103;
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Be Vietnam Pro', sans-serif;
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.5px;
@@ -357,9 +431,9 @@ body {
 /* 4.1. HEADER TRÊN CÙNG */
 .top-header {
   position: absolute;
-  top: 1%;
-  left: 1.2%;
-  right: 1.2%;
+  top: max(1%, var(--safe-top));
+  left: max(1.2%, var(--safe-left));
+  right: max(1.2%, var(--safe-right));
   height: 11%;
   display: flex;
   align-items: center;
@@ -497,47 +571,31 @@ body {
 }
 
 /* =========================================================
-   LOGO BẦU CUA
+   LOGO BẦU CUA — GIỮ ĐIỂM NEO TRÊN TAY NHÂN VẬT
    ========================================================= */
-
-/* Vị trí logo mặc định - Desktop */
 .brand-center {
-  position: absolute !important;
-
-  left: 55% !important;
-  top: 98% !important;
-
-  /* Giữ vị trí lệch phải như thiết kế hiện tại */
-  transform: translateX(30%);
-
+  --logo-float-up: -7px;
+  --logo-float-down: 7px;
+  position: absolute;
+  left: 55%;
+  top: 98%;
   z-index: 10;
-
-  /* Không chặn click các thành phần phía dưới */
+  width: min(18cqw, 24cqh, 216px);
+  transform: translateX(30%);
   pointer-events: none;
 }
 
-
-/* =========================================================
-   LOGO - DESKTOP
-   ========================================================= */
-
 .brand-logo {
   display: block;
-
-  /* Desktop giữ logo lớn */
-  height: clamp(60px, 10vh, 90px);
-  width: auto;
-
-  max-width: 30vw;
-
+  width: 100%;
+  height: auto;
+  max-width: 100%;
   object-fit: contain;
-
-  filter:
-    drop-shadow(0 4px 16px rgba(255, 180, 40, 0.45));
-
-  /* Hiệu ứng nổi lên xuống */
-  animation: moveLogo 1.2s ease-in-out infinite !important;
-
+  filter: drop-shadow(0 4px 16px rgba(255, 180, 40, 0.45));
+  animation-name: moveLogo !important;
+  animation-duration: 1.2s !important;
+  animation-timing-function: ease-in-out !important;
+  animation-iteration-count: infinite !important;
   will-change: transform;
 }
 
@@ -550,85 +608,27 @@ body {
 
   0%,
   100% {
-    transform: translateY(-7px);
+    transform: translate3d(0, var(--logo-float-up), 0);
   }
 
   50% {
-    transform: translateY(7px);
+    transform: translate3d(0, var(--logo-float-down), 0);
   }
 
 }
 
-
-/* =========================================================
-   TABLET / MOBILE DỌC
-   ========================================================= */
-
-@media (max-width: 768px) and (orientation: portrait) {
-
+/* Điện thoại ngang: giữ đúng điểm đặt trên tay như bố cục cũ,
+   nhưng giới hạn logo theo cả chiều rộng và chiều cao sân chơi. */
+@container (max-width: 1000px) and (max-height: 600px) {
   .brand-center {
-    left: 53% !important;
-    top: 75px !important;
+    --logo-float-up: -5px;
+    --logo-float-down: 5px;
+    left: 60%;
+    top: clamp(36px, 12cqh, 50px);
+    width: min(14cqw, 19cqh, 75px);
+    transform: none;
   }
-
-  .brand-logo {
-    height: clamp(38px, 8vh, 58px);
-    width: auto;
-
-    max-width: 45vw;
-  }
-
 }
-
-
-/* =========================================================
-   MOBILE XOAY NGANG
-   ========================================================= */
-
-@media (max-height: 500px) and (orientation: landscape) {
-
-  .brand-center {
-    left: 100% !important;
-    top: 50px !important;
-  }
-
-  .brand-logo {
-    /*
-      Mobile ngang:
-      điều khiển bằng WIDTH thay vì HEIGHT
-      để logo không quá lớn
-    */
-    width: clamp(45px, 14vh, 75px) !important;
-    height: auto !important;
-
-    max-width: 75px !important;
-    max-height: none !important;
-  }
-
-}
-
-
-/* =========================================================
-   MOBILE NGANG RẤT NHỎ
-   ví dụ màn hình cao <= 400px
-   ========================================================= */
-
-@media (max-height: 400px) and (orientation: landscape) {
-
-  .brand-center {
-    left: 54% !important;
-    top: 22px !important;
-  }
-
-  .brand-logo {
-    width: clamp(40px, 13vh, 60px) !important;
-    height: auto !important;
-
-    max-width: 60px !important;
-  }
-
-}
-
 
 
 /* Cụm nút công cụ (Góc phải) */
@@ -645,6 +645,8 @@ body {
   background: transparent;
   border: 0;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   display: grid;
   place-items: center;
   padding: 0;
@@ -675,7 +677,7 @@ body {
 .left-sidebar {
   position: absolute;
   top: 13.8%;
-  left: 0.6%;
+  left: max(0.6%, var(--safe-left));
   width: 15%;
   height: 70.8%;
   z-index: 15;
@@ -807,7 +809,7 @@ body {
 .right-sidebar {
   position: absolute;
   top: 13.8%;
-  right: 0.6%;
+  right: max(0.6%, var(--safe-right));
   width: 15%;
   height: 70.8%;
   z-index: 15;
@@ -1009,200 +1011,375 @@ body {
   }
 }
 
-/* Khu vực Bát Sứ & 3 Xúc Xắc */
-.bowl-pedestal-stage {
-  position: relative;
-  flex: 0 0 48%;
-  width: 48%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: visible;
+/* ===================================================================
+   4.4B. LỚP MỞ BÁT TOÀN MÀN HÌNH — KÉO TRƯỢT 360°
+   =================================================================== */
+.bowl-reveal-overlay[hidden] {
+  display: none;
 }
 
-.bowl-pedestal-stage.is-idle .stage-bowl-tray {
-  opacity: 0;
-  visibility: hidden;
-}
-
-/* 3 Xúc xắc đặt trên đĩa đỏ */
-.dice-trio {
-  position: absolute;
-  bottom: 5%;
-  display: flex;
-  gap: 7px;
-  z-index: 4;
-}
-
-/*ba viên xúc xắc sau khi lắc xong ỏ ngoài background*/
-.dice-3d-preview {
-  position: absolute;
-  bottom: -10%;
-  z-index: 3;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-  width: clamp(100px, 12vw, 158px);
-  height: clamp(50px, 6.8vw, 88px);
-  filter: drop-shadow(0 7px 9px rgba(0, 0, 0, 0.68));
-  pointer-events: none;
-}
-
-/*chỉnh kích thước xx ngoài sảnh*/
-.dice-3d-preview img {
-  width: 34%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.dice-3d-preview img:nth-child(1) {
-  transform: rotate(-9deg) translateY(3px);
-}
-
-.dice-3d-preview img:nth-child(2) {
-  transform: rotate(2deg) translateY(-3px);
-}
-
-.dice-3d-preview img:nth-child(3) {
-  transform: rotate(10deg) translateY(4px);
-}
-
-/*đĩa xúc xắc ngoài sảnh*/
-.stage-bowl-tray {
-  position: absolute;
-  bottom: -50%;
-  z-index: 1;
-  width: clamp(135px, 17vw, 215px);
-  height: auto;
-  pointer-events: none;
-  filter: drop-shadow(0 11px 14px rgba(0, 0, 0, 0.62));
-  transform: scaleY(0.66);
-  transition: opacity 180ms ease, visibility 180ms ease;
-}
-
-/*ba con xúc xắc trong menu mở */
-.die-slot {
-  width: clamp(100px, 12vw, 158px);
-  height: clamp(50px, 6.8vw, 88px);
-  border-radius: 10px;
-  background: radial-gradient(circle at 35% 30%, #fffef8 0%, #ece2d0 60%, #cdbeaa 100%);
-  border: 1.5px solid #dca74d;
-  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+.bowl-reveal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   place-items: center;
-  padding: 4px;
-  transform: rotate(0deg);
-  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  padding: max(12px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  overflow: hidden;
+  overscroll-behavior: contain;
+  color: #fff4d6;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(133, 67, 22, 0.2), transparent 47%),
+    rgba(5, 2, 1, 0.72);
+  backdrop-filter: blur(10px) saturate(0.72);
+  -webkit-backdrop-filter: blur(10px) saturate(0.72);
 }
 
-.die-slot img {
+body.bowl-overlay-active {
+  overscroll-behavior: none;
+}
+
+.bowl-reveal-header {
+  position: relative;
+  z-index: 4;
+  align-self: end;
+  text-align: center;
+  text-shadow: 0 3px 12px #000, 0 0 18px rgba(238, 177, 71, 0.35);
+}
+
+.bowl-reveal-round {
+  margin: 0 0 2px;
+  color: #dcb968;
+  font-size: clamp(10px, 1.1vw, 14px);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.bowl-reveal-header h3 {
+  margin: 0;
+  color: #fff0bd;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: clamp(18px, 2.1vw, 30px);
+  line-height: 1.1;
+}
+
+.bowl-drag-stage {
+  --bowl-x: 0px;
+  --bowl-y: 0px;
+  --bowl-angle: 0deg;
+  --bowl-progress: 0;
+  position: relative;
+  width: min(72dvh, 62vw, 720px);
+  aspect-ratio: 1;
+  align-self: center;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bowl-reveal-plate {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.72));
+}
+
+.bowl-reveal-dice {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 45%;
+  height: 39%;
+  transform: translate(-50%, -48%);
+  pointer-events: none;
+}
+
+.bowl-reveal-dice .die-slot {
+  position: absolute;
+  width: 48%;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 8px 7px rgba(42, 24, 12, 0.42));
+}
+
+.bowl-reveal-dice .die-slot:nth-child(1) {
+  left: 26%;
+  top: -4%;
+  transform: rotate(-7deg);
+}
+
+.bowl-reveal-dice .die-slot:nth-child(2) {
+  left: 2%;
+  bottom: -5%;
+  transform: rotate(8deg);
+}
+
+.bowl-reveal-dice .die-slot:nth-child(3) {
+  right: 2%;
+  bottom: -5%;
+  transform: rotate(-2deg);
 }
 
 .die-face {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 9px;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  box-shadow: none;
+  background: center / contain no-repeat;
 }
 
 .die-face[data-symbol='nai'] {
-  background-image: url('/assets/arena/die-nai.png');
+  background-image: url('/assets/arena/die-nai2.png');
 }
 
 .die-face[data-symbol='bau'] {
-  background-image: url('/assets/arena/die-bau.png');
+  background-image: url('/assets/arena/die-bau1.png');
 }
 
 .die-face[data-symbol='ga'] {
-  background-image: url('/assets/arena/die-ga.png');
+  background-image: url('/assets/arena/die-ga1.png');
 }
 
 .die-face[data-symbol='ca'] {
-  background-image: url('/assets/arena/die-ca.png');
+  background-image: url('/assets/arena/die-ca1.png');
 }
 
 .die-face[data-symbol='cua'] {
-  background-image: url('/assets/arena/die-cua.png');
+  background-image: url('/assets/arena/die-cua1.png');
 }
 
 .die-face[data-symbol='tom'] {
-  background-image: url('/assets/arena/die-tom.png');
+  background-image: url('/assets/arena/die-tom1.png');
 }
 
-.dice-mark {
-  font-size: 20px;
-  font-weight: 900;
-  color: #8b622c;
-}
-
-/* Bát sứ Phúc đậy trên xúc xắc */
-.stage-bowl-lid {
+.bowl-drag-lid {
   position: absolute;
-  top: auto;
-  /* Bát ngoài s */
-  bottom: -26%;
-  width: clamp(150px, 15vw, 190px);
-  height: auto;
-  z-index: 10;
-  cursor: pointer;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.85));
-  transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.4s;
-  touch-action: pan-y;
-}
-
-.stage-bowl-lid img {
-  width: 100%;
-  height: auto;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
   display: block;
+  width: 64%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(calc(-50% + var(--bowl-x)), calc(-50% + var(--bowl-y))) rotate(var(--bowl-angle));
+  transform-origin: center;
+  filter: drop-shadow(0 10px 13px rgba(31, 17, 9, 0.58));
+  cursor: grab;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
 }
 
-/* Hiệu ứng rung lắc xúc xắc */
-.bowl-pedestal-stage.shaking .stage-bowl-lid {
-  animation: bowlVibrate 0.12s infinite alternate;
+.bowl-drag-lid:disabled {
+  opacity: 1;
+  cursor: wait;
 }
 
-.bowl-pedestal-stage.shaking .dice-3d-preview {
-  animation: diceRattle 0.12s infinite alternate;
+.bowl-drag-lid:not(:disabled):active,
+.bowl-drag-stage.is-dragging .bowl-drag-lid {
+  cursor: grabbing;
 }
 
-@keyframes bowlVibrate {
-  0% {
-    transform: translate(-3px, -2px) rotate(-1.5deg);
-  }
-
-  50% {
-    transform: translate(3px, 2px) rotate(1.5deg);
-  }
-
-  100% {
-    transform: translate(-2px, 3px) rotate(-1deg);
-  }
+/* Giữ nguyên điểm neo của bát trong lúc nhấn/kéo. Quy tắc button:active
+   dùng chung không được ghi đè transform X/Y của thao tác kéo 360°. */
+button.bowl-drag-lid:active:not(:disabled) {
+  transform: translate(calc(-50% + var(--bowl-x)), calc(-50% + var(--bowl-y))) rotate(var(--bowl-angle));
 }
 
-@keyframes diceRattle {
+.bowl-drag-lid:focus-visible {
+  outline: 4px solid #ffd96d;
+  outline-offset: 5px;
+}
+
+.bowl-drag-lid img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.bowl-drag-stage[data-state='shaking'] {
+  animation: bowlAssemblyShake 110ms linear infinite alternate;
+}
+
+.bowl-drag-stage[data-state='ready']::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 0;
+  width: 65%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(calc(1 + var(--bowl-progress) * 0.08));
+  background: radial-gradient(circle, rgba(255, 214, 104, 0.2), transparent 68%);
+  pointer-events: none;
+}
+
+.bowl-drag-stage.is-opened .bowl-reveal-dice .die-slot {
+  animation: diceResultSettle 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.bowl-drag-stage.is-opened .bowl-reveal-dice .die-slot:nth-child(2) {
+  animation-delay: 55ms;
+}
+
+.bowl-drag-stage.is-opened .bowl-reveal-dice .die-slot:nth-child(3) {
+  animation-delay: 110ms;
+}
+
+@keyframes bowlAssemblyShake {
   from {
-    transform: translate(-4px, 1px) rotate(-1deg);
+    transform: translate3d(-3px, 1px, 0) rotate(-0.45deg);
   }
 
   to {
-    transform: translate(4px, -2px) rotate(1deg);
+    transform: translate3d(3px, -1px, 0) rotate(0.45deg);
   }
 }
 
-/* Khi mở bát tại chỗ */
-.stage-bowl-lid.opened {
-  transform: translateY(-90%) scale(0.9);
-  opacity: 0.15;
-  pointer-events: none;
+@keyframes diceResultSettle {
+  from {
+    opacity: 0.45;
+    scale: 0.88;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.bowl-reveal-footer {
+  position: relative;
+  z-index: 4;
+  align-self: start;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-height: 64px;
+  text-align: center;
+  text-shadow: 0 2px 8px #000;
+}
+
+#bowl-instructions {
+  margin: 0;
+  color: #f3dfb6;
+  font-size: clamp(12px, 1.2vw, 16px);
+  font-weight: 700;
+}
+
+.bowl-reveal-outcome {
+  min-height: 22px;
+  margin: 0;
+  color: #ffd86b;
+  font-size: clamp(14px, 1.5vw, 20px);
+  font-weight: 900;
+}
+
+.bowl-reveal-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #cdbb9c;
+  font-size: 12px;
+}
+
+.bowl-return-button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #d8aa4f;
+  border-radius: 999px;
+  color: #241006;
+  background: linear-gradient(180deg, #ffe293, #c98c2b);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bowl-return-button:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .bowl-reveal-overlay {
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+
+  .bowl-drag-stage {
+    width: min(64dvh, 50vw, 430px);
+  }
+
+  .bowl-reveal-round {
+    font-size: 9px;
+  }
+
+  .bowl-reveal-header h3 {
+    font-size: 16px;
+  }
+
+  .bowl-reveal-footer {
+    min-height: 54px;
+    gap: 2px;
+  }
+
+  #bowl-instructions,
+  .bowl-reveal-meta {
+    font-size: 10px;
+  }
+
+  .bowl-reveal-outcome {
+    min-height: 16px;
+    font-size: 13px;
+  }
+
+  .bowl-return-button {
+    min-height: 36px;
+    padding-inline: 14px;
+  }
+}
+
+@media (orientation: portrait) {
+  .bowl-drag-stage {
+    width: min(78vw, 58dvh, 640px);
+  }
+}
+
+@media (orientation: portrait) and (max-width: 950px) {
+  body.force-landscape .bowl-reveal-overlay {
+    inset: auto;
+    left: 50%;
+    top: 50%;
+    width: 100dvh;
+    height: 100dvw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center;
+  }
+
+  body.force-landscape .bowl-drag-stage {
+    width: min(64dvw, 50dvh, 430px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .bowl-drag-stage[data-state='shaking'],
+  .bowl-drag-stage.is-opened .bowl-reveal-dice .die-slot {
+    animation: none;
+  }
 }
 
 /* ===================================================================
@@ -1442,9 +1619,9 @@ button.bet-spot:active:not(:disabled) {
    =================================================================== */
 .bottom-control-bar {
   position: absolute;
-  bottom: 1.2%;
-  left: 1.5%;
-  right: 1.5%;
+  bottom: max(1.2%, var(--safe-bottom));
+  left: max(1.5%, var(--safe-left));
+  right: max(1.5%, var(--safe-right));
   height: 11%;
   z-index: 40;
   display: flex;
@@ -1672,7 +1849,7 @@ button.bet-spot:active:not(:disabled) {
 }
 
 .gold-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'Be Vietnam Pro', sans-serif;
   font-size: 18px;
   font-weight: 800;
   color: #ffda78;
@@ -1748,83 +1925,6 @@ button.bet-spot:active:not(:disabled) {
   .admin-duration-row {
     grid-template-columns: 1fr;
   }
-}
-
-/* Modal mở bát */
-.modal-bowl-stage {
-  position: relative;
-  width: 220px;
-  height: 170px;
-  margin: 16px auto;
-}
-
-.bowl-plate {
-  position: absolute;
-  left: 50%;
-  bottom: -100px;
-  z-index: 0;
-  width: 320px;
-  transform: translateX(-50%) scaleY(0.58);
-  transform-origin: center;
-  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.48));
-}
-
-.bowl-plate img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.modal-bowl-dice {
-  position: absolute;
-  bottom: 23px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  z-index: 1;
-}
-
-/* bát trong menu mở */
-.modal-bowl-lid {
-  position: absolute;
-  top: -50px;
-  left: 50%;
-  transform: translateX(-50%) translateY(calc(var(--lift, 0) * -120px));
-  width: 260px;
-  z-index: 5;
-  transition: transform 0.15s ease-out;
-}
-
-.modal-bowl-lid img {
-  width: 100%;
-}
-
-.bowl-reveal-controls {
-  margin-top: 14px;
-  text-align: center;
-}
-
-.bowl-reveal-controls input[type="range"] {
-  width: 80%;
-  margin: 10px 0;
-}
-
-.bowl-outcome-text {
-  text-align: center;
-  font-size: 15px;
-  font-weight: 800;
-  color: #ffd86b;
-  min-height: 24px;
-  margin-top: 10px;
-}
-
-.bowl-next {
-  text-align: center;
-  font-size: 11px;
-  color: #bfa588;
-  margin-top: 8px;
 }
 
 /* Thống kê tỷ lệ */
@@ -1945,10 +2045,6 @@ button.bet-spot:active:not(:disabled) {
     padding-left: 5px;
   }
 
-  .brand-logo {
-    height: 48px;
-  }
-
   .top-actions {
     gap: 5px;
   }
@@ -2047,14 +2143,6 @@ button.bet-spot:active:not(:disabled) {
     font-size: 7px;
   }
 
-  .stage-bowl-lid {
-    width: 105px;
-  }
-
-  .dice-3d-preview {
-    width: 112px;
-  }
-
   .spot-board-total {
     min-width: 42px;
     padding: 1px 3px;
@@ -2137,27 +2225,5 @@ summary:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-}
-
-/* ========================================= */
-/* LOGO - ĐIỆN THOẠI XOAY NGANG */
-/* PHẢI ĐẶT Ở CUỐI FILE */
-/* ========================================= */
-
-@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
-
-  .brand-center {
-    left: 60% !important;
-    top: 50px !important;
-
-    transform: translateX(0) !important;
-  }
-
-  .brand-logo {
-    width: clamp(45px, 14vh, 75px) !important;
-    height: auto !important;
-
-    max-width: 75px !important;
   }
 }

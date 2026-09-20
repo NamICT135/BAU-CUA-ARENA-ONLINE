@@ -348,18 +348,20 @@ export class GameService {
 
     requireCondition(player.eligible, 'WAIT_NEXT_ROUND', 'Bạn sẽ tham gia đặt cược từ vòng tiếp theo.');
     if (event === 'bet:clear') {
+      player.balance += totalBets(player.bets);
       player.bets = this.emptyBets();
       return;
     }
     requireCondition(typeof payload.symbol === 'string' && this.symbolIds.includes(payload.symbol),
       'INVALID_SYMBOL', 'Biểu tượng cược không hợp lệ.');
-    const amount = payload.allIn === true ? player.balance - totalBets(player.bets) : payload.amount;
+    const amount = payload.allIn === true ? player.balance : payload.amount;
     requireCondition(Number.isSafeInteger(amount) && amount > 0 && amount <= MAX_BALANCE,
       'INVALID_AMOUNT', 'Mệnh giá cược không hợp lệ.');
-    requireCondition(totalBets(player.bets) + amount <= player.balance,
+    requireCondition(amount <= player.balance,
       'INSUFFICIENT_BALANCE', 'Số xu còn lại không đủ để đặt cược này.');
-    requireCondition(player.balance + 3 * (totalBets(player.bets) + amount) <= MAX_BALANCE,
+    requireCondition(player.balance + 4 * totalBets(player.bets) + 3 * amount <= MAX_BALANCE,
       'BALANCE_LIMIT', 'Cược vượt giới hạn xu an toàn của phòng.');
+    player.balance -= amount;
     player.bets[payload.symbol] += amount;
   }
 
@@ -445,7 +447,10 @@ export class GameService {
     if (event === 'host:cancel') {
       requireCondition(room.phase === 'betting', 'WRONG_PHASE', 'Chỉ hủy được ván chưa lắc.');
       room.forcedDice = null;
-      this.openRound(room); // Bets are reserved, so clearing them releases every stake.
+      for (const entry of room.players.values()) {
+        entry.balance += totalBets(entry.bets);
+      }
+      this.openRound(room);
       return;
     }
     const target = room.players.get(payload.playerId);
@@ -453,7 +458,7 @@ export class GameService {
     if (event === 'host:grant') {
       requireCondition(room.phase !== 'revealing', 'WRONG_PHASE', 'Chờ lắc xong để cấp xu.');
       requireCondition(Number.isSafeInteger(payload.amount) && payload.amount > 0 && payload.amount <= MAX_AMOUNT &&
-        target.balance + payload.amount + 3 * totalBets(target.bets) <= MAX_BALANCE,
+        target.balance + payload.amount + 4 * totalBets(target.bets) <= MAX_BALANCE,
       'INVALID_AMOUNT', 'Số xu cấp phải là số nguyên từ 1 đến 1 tỷ và không vượt giới hạn ví.');
       target.balance += payload.amount;
       target.stats.highestBalance = Math.max(target.stats.highestBalance, target.balance);
@@ -483,7 +488,7 @@ export class GameService {
       if (totalBet === 0) continue;
       const totalReturn = calculateReturn(player.bets, dice);
       const profit = totalReturn - totalBet;
-      player.balance += profit;
+      player.balance += totalReturn;
       player.stats.gamesPlayed += 1;
       player.stats[profit > 0 ? 'wins' : profit < 0 ? 'losses' : 'breakEven'] += 1;
       player.stats.highestBalance = Math.max(player.stats.highestBalance, player.balance);

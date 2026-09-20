@@ -1,0 +1,13 @@
+{
+  "name": "Bầu Cua Hoàng Gia",
+  "short_name": "Bầu Cua",
+  "description": "Bàn Bầu Cua trực tuyến tối ưu cho màn hình ngang.",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#090302",
+  "theme_color": "#120504"
+}

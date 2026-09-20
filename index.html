@@ -3,16 +3,22 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#120504" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bầu Cua" />
   <meta name="description"
-    content="Bầu Cua Hoàng Gia — Vui là chính, may là đỉnh. Sòng bầu cua trực tuyến chuẩn 16:9 đẳng cấp." />
+    content="Bầu Cua Hoàng Gia — Vui là chính, may là đỉnh. Sòng bầu cua trực tuyến toàn màn hình đẳng cấp." />
   <link rel="icon" href="data:," />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/assets/arena/logo1.png" />
   <title>Bầu Cua — Vui Là Chính · Tiền là ảo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Montserrat:wght@500;600;700;800;900&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500&family=Cinzel:wght@600;700;800;900&display=swap"
     rel="stylesheet">
 </head>
 
@@ -25,13 +31,13 @@
         <span class="rotate-arrow">↷</span>
       </div>
       <h2>VUI LÒNG XOAY NGANG<br />THIẾT BỊ</h2>
-      <p>Trò chơi được thiết kế chuẩn tỉ lệ 16:9 sắc nét. Hãy xoay ngang điện thoại để trải nghiệm sòng bài chân thực
-        nhất.</p>
-      <button id="request-fullscreen" type="button" class="btn-rotate-fs">Toàn Màn Hình ⛶</button>
+      <p>Hãy xoay ngang điện thoại và bật toàn màn hình để trò chơi tự phủ kín vùng hiển thị của thiết bị.</p>
+      <button id="request-fullscreen" type="button" class="btn-rotate-fs" aria-pressed="false">Toàn Màn Hình
+        ⛶</button>
     </div>
   </aside>
 
-  <!-- Container chính 16:9 tự căn giữa màn hình -->
+  <!-- Container chính thích ứng theo vùng nhìn thực tế của thiết bị -->
   <div class="arcade-viewport">
     <div class="arcade-stage" id="arcade-stage">
 
@@ -39,7 +45,8 @@
       <section id="home" class="lobby-overlay" aria-labelledby="lobby-heading">
         <div class="lobby-box">
           <div class="lobby-brand">
-            <img src="/assets/arena/logo.png" alt="Bầu Cua" class="lobby-logo" />
+            <img src="/assets/arena/logo1.png" alt="Bầu Cua" class="lobby-logo" width="2079" height="756"
+              decoding="async" fetchpriority="high" />
             <p class="lobby-tagline">VUI LÀ CHÍNH · TIỀN LÀ ẢO</p>
           </div>
           <form id="lobby-form" class="lobby-form">
@@ -97,11 +104,18 @@
 
           <!-- Logo Bầu Cua Vàng Kim (Ở giữa) -->
           <div class="brand-center">
-            <img src="/assets/arena/logo.png" alt="Bầu Cua - Vui Là Chính, May Là Đỉnh" class="brand-logo" />
+            <img src="/assets/arena/logo1.png" alt="Bầu Cua - Vui Là Chính, May Là Đỉnh" class="brand-logo" width="2079"
+              height="756" decoding="async" />
           </div>
 
           <!-- Cụm nút công cụ (Góc phải) -->
           <div class="top-actions">
+            <button id="fullscreen-toggle" class="circle-btn" type="button" title="Toàn màn hình & xoay ngang"
+              aria-label="Toàn màn hình và xoay ngang" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" />
+              </svg>
+            </button>
             <button id="sound-toggle" class="circle-btn" type="button" title="Bật/Tắt âm thanh" aria-label="Âm thanh"
               aria-pressed="true">
               <img id="sound-icon" src="/assets/arena/icon-sound.png" alt="" aria-hidden="true" />
@@ -144,7 +158,7 @@
           </button>
         </aside>
 
-        <!-- 4. SÂN KHẤU TRUNG TÂM PHÍA TRÊN: BÁT SỨ PHÚC & 3 XÚC XẮC -->
+        <!-- 4. SÂN KHẤU TRUNG TÂM PHÍA TRÊN: ĐỒNG HỒ & TRẠNG THÁI -->
         <div class="center-stage-top">
           <!-- Thẻ đếm ngược bên trái -->
           <div class="floating-card timer-card">
@@ -152,27 +166,6 @@
             <div class="card-value digital-clock" id="round-countdown">00:12</div>
             <div class="clock-track">
               <div id="clock-progress"></div>
-            </div>
-          </div>
-
-          <!-- Khu vực Bát sứ Phúc & 3 Xúc xắc (Đặt vừa vặn trên đĩa nhung đỏ) -->
-          <div id="dice-area" class="bowl-pedestal-stage">
-            <img class="stage-bowl-tray" src="/assets/arena/bowl-tray.png" alt="" aria-hidden="true"
-              draggable="false" />
-            <div id="dice-3d-preview" class="dice-3d-preview" aria-hidden="true" hidden>
-              <img src="/assets/arena/die-nai.png" alt="" draggable="false" />
-              <img src="/assets/arena/die-bau.png" alt="" draggable="false" />
-              <img src="/assets/arena/die-ga.png" alt="" draggable="false" />
-            </div>
-            <!-- 3 Xúc xắc nằm phía dưới / bên trong đĩa -->
-            <div class="dice-trio" id="dice-trio" role="group" aria-label="Ba xúc xắc" hidden>
-              <div id="dice-1" class="die-slot"><span class="dice-mark">?</span></div>
-              <div id="dice-2" class="die-slot"><span class="dice-mark">?</span></div>
-              <div id="dice-3" class="die-slot"><span class="dice-mark">?</span></div>
-            </div>
-            <!-- Bát sứ Phúc đậy xúc xắc (Chạm để mở bát từ từ) -->
-            <div id="stage-bowl-lid" class="stage-bowl-lid" title="Chạm để mở bát" hidden>
-              <img src="/assets/arena/bowl-porcelain.png" alt="Bát sứ Phúc" draggable="false" />
             </div>
           </div>
 
@@ -207,7 +200,7 @@
               <img src="/assets/arena/chip-prev.png" alt="" aria-hidden="true" />
             </button>
             <div id="chip-controls" class="chip-rack" role="radiogroup" aria-label="Chọn mức cược">
-              <!-- Render động 5 chip: 1K, 5K, 10K, 50K, 100K; ALL IN luôn đứng cuối -->
+              <!-- Render động 6 chip: 1K, 5K, 10K, 50K, 100K, 500K; ALL IN luôn đứng cuối -->
               <button id="all-in" class="chip-slot-btn chip-all-in-btn" type="button" data-chip="all"
                 aria-label="Cược tất cả số xu còn lại" aria-pressed="false">
                 <img src="/assets/arena/chip-allin.png" alt="" aria-hidden="true" draggable="false" />
@@ -256,36 +249,33 @@
     </div>
   </div>
 
-  <!-- POPUP BÁT XÚC XẮC MỞ TỪ TỪ (HỖ TRỢ MỞ TRÊN DI ĐỘNG & BÀN CHƠI) -->
-  <dialog id="bowl-dialog" class="custom-modal bowl-dialog" aria-labelledby="bowl-heading">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="bowl-round" class="gold-title">MỞ BÁT XÚC XẮC</h3>
-        <button id="close-bowl" type="button" class="btn-modal-close" aria-label="Đóng">×</button>
+  <!-- LỚP MỞ BÁT TOÀN MÀN HÌNH: ĐĨA CỐ ĐỊNH, BÁT TRƯỢT 360° -->
+  <section id="bowl-overlay" class="bowl-reveal-overlay" role="dialog" aria-modal="true" aria-labelledby="bowl-heading"
+    aria-describedby="bowl-instructions" tabindex="-1" hidden>
+    <header class="bowl-reveal-header">
+      <p id="bowl-round" class="bowl-reveal-round">PHIÊN 0001</p>
+      <h3 id="bowl-heading">Đang lắc xúc xắc…</h3>
+    </header>
+
+    <div id="bowl-stage" class="bowl-drag-stage" data-state="shaking">
+      <img class="bowl-reveal-plate" src="/assets/arena/bowl-tray1.png" alt="Đĩa sứ hoa mẫu đơn" draggable="false" />
+      <div id="bowl-dice" class="bowl-reveal-dice" role="group" aria-label="Kết quả ba xúc xắc" aria-hidden="true">
       </div>
-      <h4 id="bowl-heading">Đang chờ lắc xúc xắc…</h4>
-      <p id="bowl-instructions" class="modal-desc">Kéo mở bát từ từ để đón kết quả may mắn!</p>
-      <div id="bowl-stage" class="modal-bowl-stage" data-state="shaking">
-        <div class="bowl-plate" aria-hidden="true">
-          <img src="/assets/arena/bowl-tray.png" alt="" draggable="false" />
-        </div>
-        <div id="bowl-dice" class="modal-bowl-dice" aria-label="Kết quả ba xúc xắc"></div>
-        <div id="bowl-lid" class="modal-bowl-lid" aria-hidden="true">
-          <img src="/assets/arena/bowl-porcelain.png" alt="Bát sứ" draggable="false" />
-        </div>
-      </div>
-      <div class="bowl-reveal-controls">
-        <label for="bowl-lift">Mở bát: <strong id="bowl-lift-percent">0%</strong></label>
-        <input id="bowl-lift" type="range" min="0" max="100" value="0" step="1" disabled />
-        <div class="modal-actions">
-          <button id="reveal-bowl" class="btn-gold-primary" type="button" disabled>Mở Bát Nhanh</button>
-          <button id="finish-bowl" class="btn-gold-secondary" type="button" hidden>Về Bàn Cược</button>
-        </div>
-      </div>
-      <p id="bowl-outcome" class="bowl-outcome-text" role="status" aria-live="polite"></p>
-      <p class="bowl-next">Ván tiếp theo sau: <strong id="bowl-next-countdown">—</strong></p>
+      <button id="bowl-lid" class="bowl-drag-lid" type="button"
+        aria-label="Kéo bát theo bất kỳ hướng nào để mở; dùng phím Enter để tự mở" disabled>
+        <img src="/assets/arena/bowl-tray2.png" alt="" aria-hidden="true" draggable="false" />
+      </button>
     </div>
-  </dialog>
+
+    <footer class="bowl-reveal-footer">
+      <p id="bowl-instructions">Cược đã khóa. Xúc xắc đang lắc bên trong bát.</p>
+      <p id="bowl-outcome" class="bowl-reveal-outcome" role="status" aria-live="polite"></p>
+      <div class="bowl-reveal-meta">
+        <span>Ván tiếp theo sau: <strong id="bowl-next-countdown">—</strong></span>
+        <button id="bowl-return" class="bowl-return-button" type="button" hidden>Về bàn cược</button>
+      </div>
+    </footer>
+  </section>
 
   <!-- MODAL: HƯỚNG DẪN / LUẬT CHƠI -->
   <dialog id="rules-dialog" class="custom-modal" aria-labelledby="rules-title">
@@ -426,24 +416,3 @@
 </body>
 
 </html>
-/* ========================================= */
-/* LOGO - ĐIỆN THOẠI XOAY NGANG */
-/* PHẢI ĐẶT Ở CUỐI FILE */
-/* ========================================= */
-
-@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
-
-.brand-center {
-left: 50% !important;
-top: 40px !important;
-
-transform: translateX(0) !important;
-}
-
-.brand-logo {
-width: clamp(45px, 14vh, 75px) !important;
-height: auto !important;
-
-max-width: 75px !important;
-}
-}

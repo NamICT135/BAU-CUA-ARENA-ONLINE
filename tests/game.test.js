@@ -44,7 +44,7 @@ test('dedupe retains accepted IDs beyond 200 edits; exhausted cache never reappl
     // An empty round can be reset, including when everybody has run out of coins.
     const reset = ok(game, 'host', 'room:reset', { requestId: 'recover', gameId: created.state.gameId, roundNumber: 1 });
     assert.equal(reset.state.phase, 'waiting');
-    assert.equal(reset.state.you.balance, 1000);
+    assert.equal(reset.state.you.balance, config.initialBalance);
   } finally { game.close(); }
 });
 
@@ -68,6 +68,13 @@ test('all configured symbols/chips work; clear is personal and double settle doe
   const open = ok(game, 'host', 'round:open', { requestId: 'open', gameId: host.state.gameId, roundNumber: 0 });
   const roundId = open.state.roundId;
   let sequence = 0;
+  const extraFunds = Math.max(0, Math.max(...config.chips) - config.initialBalance);
+  if (extraFunds > 0) {
+    ok(game, 'host', 'host:grant', {
+      requestId: 'fund-configured-chips', gameId: open.state.gameId, roundNumber: open.state.roundNumber,
+      playerId: game.memberships.get('guest').playerId, amount: extraFunds,
+    });
+  }
   for (const symbol of config.symbols) {
     for (const amount of config.chips) {
       ok(game, 'guest', 'bet:clear', { requestId: `clear${sequence++}`, roundId });
@@ -80,13 +87,13 @@ test('all configured symbols/chips work; clear is personal and double settle doe
   ok(game, 'host', 'round:shake', { requestId: 'shake', roundId });
   await delay(30);
   const result = ok(game, 'host', 'room:sync').state;
-  assert.equal(result.you.balance, 1150);
+  assert.equal(result.you.balance, config.initialBalance + 150);
   assert.equal(result.you.lastResult.totalReturn, 200);
   assert.equal(result.you.stats.wins, 1);
   assert.equal(ok(game, 'guest', 'room:sync').state.you.stats.gamesPlayed, 0);
   game.settle(game.rooms.get(host.state.code));
   assert.equal(ok(game, 'host', 'room:sync').state.history.length, 1);
-  assert.equal(ok(game, 'host', 'room:sync').state.you.balance, 1150);
+  assert.equal(ok(game, 'host', 'room:sync').state.you.balance, config.initialBalance + 150);
 });
 
 test('disconnected empty seats expire while accepted bets remain available for settlement', t => {

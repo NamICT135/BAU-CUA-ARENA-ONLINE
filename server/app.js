@@ -18,6 +18,25 @@ const mimeTypes = {
   '.webmanifest': 'application/manifest+json',
 };
 
+function isPrivateDevelopmentOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    if (!['http:', 'https:'].includes(url.protocol) || url.port !== '5173') return false;
+    const hostname = url.hostname.toLowerCase();
+    if (['localhost', '127.0.0.1', '[::1]'].includes(hostname) || hostname.endsWith('.local')) return true;
+    const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+    if (!match) return false;
+    const octets = match.slice(1).map(Number);
+    if (octets.some(value => value > 255)) return false;
+    return octets[0] === 10 ||
+      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168) ||
+      (octets[0] === 169 && octets[1] === 254);
+  } catch {
+    return false;
+  }
+}
+
 export function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
@@ -73,6 +92,8 @@ export async function createGameServer(options = {}) {
     }
   });
 
+  const hasConfiguredOrigins = options.allowedOrigins !== undefined || Boolean(process.env.ALLOWED_ORIGINS);
+  const allowPrivateDevelopmentOrigins = process.env.NODE_ENV !== 'production' && !hasConfiguredOrigins;
   const allowedOrigins = new Set(options.allowedOrigins ?? (process.env.ALLOWED_ORIGINS ||
     (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173,http://127.0.0.1:5173')).split(',').filter(Boolean));
   const io = new Server(httpServer, {
@@ -82,6 +103,7 @@ export async function createGameServer(options = {}) {
       let allowed = !origin || allowedOrigins.has(origin);
       try {
         if (origin && new URL(origin).host === req.headers.host) allowed = true;
+        if (!allowed && allowPrivateDevelopmentOrigins) allowed = isPrivateDevelopmentOrigin(origin);
       } catch { allowed = false; }
       done(null, allowed);
     },
