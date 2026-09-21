@@ -555,7 +555,6 @@ function renderHistory() {
   if (!historyGrid) return;
 
   const validRounds = room.history.filter(round => !bowl.covered() || round.id !== room.roundId);
-  const allDiceResults = [];
   const recentRounds = validRounds.slice(0, 7);
 
   const items = [];
