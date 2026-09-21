@@ -555,7 +555,7 @@ function renderHistory() {
   if (!historyGrid) return;
 
   const validRounds = room.history.filter(round => !bowl.covered() || round.id !== room.roundId);
-  const recentRounds = validRounds.slice(0, 7);
+  const recentRounds = validRounds.slice(0, 5);
 
   const items = [];
 
@@ -574,7 +574,7 @@ function renderHistory() {
     }
   }
 
-  const totalSlots = 21;
+  const totalSlots = 15;
 
   while (items.length < totalSlots) {
     items.push(element('div', 'history-token empty'));
