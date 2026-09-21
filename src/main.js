@@ -54,7 +54,7 @@ let audioCtx = null;
 const backgroundMusic = ui['background-music'];
 
 if (backgroundMusic) {
-  backgroundMusic.volume = 0.8;
+  backgroundMusic.volume = 0.6;
   backgroundMusic.loop = true;
 }
 
