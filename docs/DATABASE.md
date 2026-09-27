@@ -5,37 +5,38 @@ Tài liệu này bàn giao toàn bộ nền tảng Database, Schema chuẩn hóa
 
 ---
 
-## 1. Nguyên Tắc Cốt Lõi (Đã Thống Nhất Theo Contract Docx)
+## 1. Nguyên Tắc Cốt Lõi (Đã Thống Nhất Theo Contract)
 
 - **Xu ảo giải trí:** Toàn bộ `balance` trong ví và giao dịch (`amount`) là tiền xu ảo trong game, không có giá trị quy đổi và tuyệt đối không tích hợp cổng thanh toán.
 - **Mỗi User đúng 1 Wallet:** Một tài khoản chỉ có một ví duy nhất (`wallets.user_id` UNIQUE). Đổi phòng hoặc đăng nhập lại không cấp lại ví mới.
-- **Mỗi User tối đa 1 Active Room Membership:** Một tài khoản chỉ được tham gia 1 phòng chơi tại một thời điểm (`idx_unique_active_membership`).
+- **Mỗi User tối đa 1 Active Room Membership:** Một tài khoản chỉ được tham gia 1 phòng chơi tại một thời điểm (`idx_unique_active_membership` trên `room_members WHERE left_at IS NULL`).
 - **Ledger chuẩn & Idempotent:** Mọi thao tác đổi xu phải ghi sổ cái `wallet_transactions` kèm `idempotency_key`, `balance_before`, `balance_after`, và `transaction_type` thuộc danh sách cố định:
   `WELCOME | BET_DEBIT | BET_REFUND | ROUND_PAYOUT | ADMIN_GRANT | AD_REWARD`
 - **Không tin Client:** Server quyết định số dư cuối cùng; ACK và Room Broadcast chỉ được gửi **sau khi** Database transaction đã commit thành công.
+- **Admin Override:** Tách biệt `admin_override_result` (admin có thể đặt trước khi chốt) khỏi `final_result` (kết quả bất biến khi commit settlement).
 
 ---
 
 ## 2. Cấu Trúc Bảng CSDL (Schema Reference)
 
-Hệ thống có **14 bảng chính + 1 view**:
+Hệ thống có **13 bảng chính + 1 view + 1 bảng migrations**:
 
 | Tên Bảng / View | Mục Đích | Ràng Buộc Quan Trọng |
 |---|---|---|
-| `users` | Tài khoản người chơi | `email` lowercase, `username` >= 3 ký tự |
+| `users` | Tài khoản người chơi | `email` lowercase, `username` >= 3 ký tự, `role IN ('player','admin')`, `status IN ('active','banned','deleted')` |
 | `wallets` | Ví xu ảo duy nhất của từng user | `user_id` UNIQUE, `balance >= 0`, `version` (optimistic locking) |
-| `wallet_transactions` | Sổ cái lưu lịch sử biến động xu | `user_id + idempotency_key` UNIQUE INDEX, `amount != 0`, `transaction_type CHECK` |
+| `wallet_transactions` | Sổ cái lưu lịch sử biến động xu | `user_id + idempotency_key` UNIQUE INDEX, `amount != 0`, `balance_before NOT NULL`, `balance_after NOT NULL`, `transaction_type CHECK` |
 | `player_profiles` *(VIEW)* | Alias kết hợp `users` + `wallets` | Dùng cho Phần B lấy nhanh profile + balance + version |
-| `auth_sessions` | Phiên đăng nhập | `token_hash` UNIQUE, `expires_at` |
+| `auth_sessions` | Phiên đăng nhập | `token_hash` UNIQUE, `expires_at`, `revoked_at` (soft-revoke), `last_activity_at` |
 | `account_tokens` | Token verify / reset password | `type CHECK ('email_verify', 'password_reset')` |
-| `rooms` | Phòng chơi | `code` UNIQUE |
-| `room_members` | Thành viên tham gia phòng | `user_id` UNIQUE khi `left_at IS NULL` (1 active room per player) |
-| `rounds` | Ván cược bầu cua | `room_id + round_number` UNIQUE, `status CHECK` |
-| `bets` | Chi tiết cược xu ảo | `symbol CHECK ('bau','cua','tom','ca','ga','nai')`, `amount > 0` |
+| `rooms` | Phòng chơi | `code` UNIQUE, `mode CHECK ('normal', 'auto')`, `status CHECK ('active', 'paused', 'closed')` |
+| `room_members` | Thành viên tham gia phòng | `user_id` UNIQUE khi `left_at IS NULL` (1 active room per player), `role CHECK ('host', 'player')` |
+| `rounds` | Ván cược bầu cua | `room_id + round_number` UNIQUE, `status CHECK`, `result_mode CHECK ('random', 'admin_scheduled')`, `final_result`, `admin_override_result`, `betting_deadline` |
+| `bets` | Chi tiết cược xu ảo | `symbol CHECK ('bau','cua','tom','ca','ga','nai')`, `amount > 0`, `status CHECK` |
 | `player_round_results` | Tổng kết thắng/thua từng ván của mỗi user | `round_id + user_id` UNIQUE, `outcome CHECK ('win','loss','draw')` |
 | `processed_commands` | Chống trùng lặp lệnh Socket.IO | `command_key` UNIQUE |
-| `ad_reward_sessions` | Phiên xem quảng cáo nhận xu ảo | `status CHECK ('pending','completed','claimed','rejected','expired')` |
-| `admin_audit_logs` | Nhật ký thao tác quản trị | Trút log hành động admin (`grant_coins`, `ban_user`, v.v.) |
+| `ad_reward_sessions` | Phiên xem quảng cáo nhận xu ảo | `provider`, `nonce`, `expires_at`, `provider_transaction_id` UNIQUE, `status CHECK ('pending','completed','claimed','rejected','expired')` |
+| `admin_audit_logs` | Nhật ký thao tác quản trị | `target_type`, `target_id`, `reason`, `changes JSONB`, `details JSONB`, `ip_address` |
 | `schema_migrations` | Quản lý phiên bản migration | `filename` UNIQUE, `checksum` SHA256 |
 
 ---
@@ -56,10 +57,10 @@ DB_NAME_TEST=bau_cua_test
 
 ### Lệnh Quản Lý CSDL
 ```bash
-# Chạy toàn bộ migrations (001 -> 002 -> 003) tự động theo thứ tự
+# Chạy migration (001_create_initial_schema.sql gộp duy nhất)
 npm run db:migrate
 
-# Chạy toàn bộ Test Suite (45/45 tests pass)
+# Chạy toàn bộ Test Suite (56/56 tests pass)
 npm test
 ```
 
@@ -84,8 +85,8 @@ await WalletService.refundBet({ userId, amount: 20000, roomId, roundId, requestI
 // Trả thưởng khi ván có kết quả
 await WalletService.payoutRound({ userId, amount: 60000, roomId, roundId });
 
-// Admin cấp xu
-await WalletService.adminGrant({ userId, amount: 50000, actorId: adminUserId, reason: 'Event reward' });
+// Admin cấp xu (BẮT BUỘC có requestId để đảm bảo idempotency)
+await WalletService.adminGrant({ userId, amount: 50000, actorId: adminUserId, requestId, reason: 'Event reward' });
 ```
 
 ### 4.2. `ProcessedCommandRepository` (`src/repositories/ProcessedCommandRepository.js`)
@@ -140,13 +141,15 @@ await AuditLogger.logAdminAction({
 
 ---
 
-## 5. Danh Sách Unit & Integration Tests (45/45 Passed)
+## 5. Danh Sách Unit & Integration Tests (56/56 Passed)
 
 - `tests/db/connection.test.js`: Kết nối PostgreSQL & kiểm tra 11+ bảng.
 - `tests/db/repository.test.js`: CRUD chuẩn với Base Repository.
-- `tests/db/audit.test.js`: Thao tác ghi nhật ký admin.
+- `tests/db/audit.test.js`: Thao tác ghi nhật ký admin (target_type, reason, changes).
+- `tests/db/transactionManager.test.js`: Transaction commit, rollback, deadlock retry.
 - `tests/repositories/user.test.js`: Tạo user, tìm kiếm case-insensitive, đổi trạng thái.
-- `tests/repositories/wallet.test.js`: Thao tác ví nguyên tử & row lock.
+- `tests/repositories/wallet.test.js`: Thao tác ví nguyên tử ủy quyền qua WalletService.
 - `tests/repositories/history_stats.test.js`: Lịch sử ván, thống kê thắng/thua & tần suất xúc xắc.
 - `tests/repositories/integration.test.js`: Chuỗi luồng người chơi gia nhập phòng -> đặt cược -> chốt kết quả.
-- `tests/services/walletService.test.js`: Idempotency chào mừng, trừ/hoàn/trả thưởng xu cược.
+- `tests/repositories/settlement.test.js`: Atomic round settlement, double-settle prevention.
+- `tests/services/walletService.test.js`: Idempotency chào mừng, trừ/hoàn/trả thưởng, adminGrant idempotency.

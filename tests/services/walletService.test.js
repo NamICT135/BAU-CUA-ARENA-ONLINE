@@ -72,4 +72,47 @@ describe('WalletService Test Suite (Ledger & Idempotency)', () => {
     assert.strictEqual(parseInt(res.wallet.balance, 10), 150000);
     assert.strictEqual(res.transaction.transaction_type, TRANSACTION_TYPES.ROUND_PAYOUT);
   });
+
+  test('Should admin grant with idempotency (same requestId → no double grant)', async () => {
+    const requestId = 'admin_grant_test_1';
+    const adminUser = await userRepo.createUser({
+      username: 'admin_grant_' + Date.now(),
+      email: `admin_grant_${Date.now()}@example.com`,
+      passwordHash: 'hash',
+      displayName: 'Admin',
+      role: 'admin',
+    });
+
+    // First grant → balance 150k → 200k
+    const res1 = await WalletService.adminGrant({
+      userId: testUser.id,
+      amount: 50000,
+      actorId: adminUser.id,
+      requestId,
+      reason: 'Test event',
+    });
+    assert.strictEqual(res1.isDuplicate, false);
+    assert.strictEqual(parseInt(res1.wallet.balance, 10), 200000);
+
+    // Retry same requestId → no additional grant
+    const res2 = await WalletService.adminGrant({
+      userId: testUser.id,
+      amount: 50000,
+      actorId: adminUser.id,
+      requestId,
+      reason: 'Test event',
+    });
+    assert.strictEqual(res2.isDuplicate, true);
+    assert.strictEqual(parseInt(res2.wallet.balance, 10), 200000);
+  });
+
+  test('Should reject adminGrant without requestId', async () => {
+    await assert.rejects(async () => {
+      await WalletService.adminGrant({
+        userId: testUser.id,
+        amount: 10000,
+        actorId: testUser.id,
+      });
+    }, /requestId/);
+  });
 });

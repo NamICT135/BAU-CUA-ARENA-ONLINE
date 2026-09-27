@@ -37,10 +37,15 @@ export class Repository {
     return res.rows[0];
   }
 
+  // Danh sách bảng có cột updated_at
+  static TABLES_WITH_UPDATED_AT = new Set(['users', 'wallets']);
+
   async update(id, data) {
     const keys = Object.keys(data);
     const set = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
-    const sql = `UPDATE ${this.tableName} SET ${set}, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`;
+    const hasUpdatedAt = Repository.TABLES_WITH_UPDATED_AT.has(this.tableName);
+    const suffix = hasUpdatedAt ? ', updated_at = CURRENT_TIMESTAMP' : '';
+    const sql = `UPDATE ${this.tableName} SET ${set}${suffix} WHERE id = $1 RETURNING *`;
     const res = await query(sql, [id, ...Object.values(data)]);
     return res.rows[0];
   }

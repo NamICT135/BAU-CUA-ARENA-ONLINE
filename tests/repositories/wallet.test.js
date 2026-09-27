@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { UserRepository } from '../../src/repositories/UserRepository.js';
 import { WalletRepository } from '../../src/repositories/WalletRepository.js';
+import { TRANSACTION_TYPES } from '../../src/services/WalletService.js';
 
 describe('WalletRepository Test Suite', () => {
   const userRepo = new UserRepository();
@@ -25,20 +26,20 @@ describe('WalletRepository Test Suite', () => {
   });
 
   test('Should deduct balance atomically', async () => {
-    const updated = await walletRepo.deductBalance(testUserId, 10000, 'bet_placed', 'Test bet');
+    const updated = await walletRepo.deductBalance(testUserId, 10000, TRANSACTION_TYPES.BET_DEBIT, 'Test bet');
     assert.strictEqual(parseInt(updated.balance, 10), 40000);
     assert.strictEqual(updated.version, 2);
   });
 
   test('Should add balance atomically', async () => {
-    const updated = await walletRepo.addBalance(testUserId, 25000, 'bet_won', 'Test win');
+    const updated = await walletRepo.addBalance(testUserId, 25000, TRANSACTION_TYPES.ROUND_PAYOUT, 'Test win');
     assert.strictEqual(parseInt(updated.balance, 10), 65000);
     assert.strictEqual(updated.version, 3);
   });
 
   test('Should fail to deduct more than current balance', async () => {
     await assert.rejects(async () => {
-      await walletRepo.deductBalance(testUserId, 1000000, 'bet_placed', 'Too high bet');
+      await walletRepo.deductBalance(testUserId, 1000000, TRANSACTION_TYPES.BET_DEBIT, 'Too high bet');
     }, /Insufficient virtual coins/);
   });
 

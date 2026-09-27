@@ -21,24 +21,56 @@ export class SessionRepository extends Repository {
       `SELECT s.*, u.username, u.display_name, u.role, u.status
        FROM auth_sessions s
        JOIN users u ON s.user_id = u.id
-       WHERE s.token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP`,
+       WHERE s.token_hash = $1
+         AND s.expires_at > CURRENT_TIMESTAMP
+         AND s.revoked_at IS NULL`,
       [tokenHash]
     );
     return res.rows[0] || null;
   }
 
+  /**
+   * Soft-revoke: đánh dấu revoked_at thay vì xóa, giữ audit trail.
+   */
   async revokeSession(tokenHash) {
-    const res = await query(`DELETE FROM auth_sessions WHERE token_hash = $1 RETURNING *`, [tokenHash]);
+    const res = await query(
+      `UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP
+       WHERE token_hash = $1 AND revoked_at IS NULL
+       RETURNING *`,
+      [tokenHash]
+    );
     return res.rows[0] || null;
   }
 
   async revokeAllUserSessions(userId) {
-    const res = await query(`DELETE FROM auth_sessions WHERE user_id = $1 RETURNING *`, [userId]);
+    const res = await query(
+      `UPDATE auth_sessions SET revoked_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1 AND revoked_at IS NULL
+       RETURNING *`,
+      [userId]
+    );
     return res.rows;
   }
 
+  /**
+   * Cập nhật last_activity_at cho session (dùng cho idle timeout check).
+   */
+  async touchSession(tokenHash) {
+    const res = await query(
+      `UPDATE auth_sessions SET last_activity_at = CURRENT_TIMESTAMP
+       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+       RETURNING *`,
+      [tokenHash]
+    );
+    return res.rows[0] || null;
+  }
+
   async cleanupExpiredSessions() {
-    const res = await query(`DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP RETURNING *`);
+    const res = await query(
+      `DELETE FROM auth_sessions
+       WHERE expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL
+       RETURNING *`
+    );
     return res.rowCount;
   }
 }

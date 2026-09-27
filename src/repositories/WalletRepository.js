@@ -1,5 +1,6 @@
 import { Repository } from '../db/Repository.js';
-import { query, getClient } from '../db/connection.js';
+import { query } from '../db/connection.js';
+import { WalletService, TRANSACTION_TYPES } from '../services/WalletService.js';
 
 export class WalletRepository extends Repository {
   constructor() {
@@ -19,97 +20,46 @@ export class WalletRepository extends Repository {
     return res.rows[0];
   }
 
-  // Deduct balance with optimistic locking and transaction support (for virtual coins)
-  async deductBalance(userId, amount, type = 'bet_placed', reason = null, referenceId = null) {
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
-
-      // Get current wallet with row lock
-      const walletRes = await client.query(`SELECT * FROM wallets WHERE user_id = $1 FOR UPDATE`, [userId]);
-      const wallet = walletRes.rows[0];
-
-      if (!wallet) {
-        throw new Error('Wallet not found');
-      }
-
-      const currentBalance = BigInt(wallet.balance);
-      const deductAmount = BigInt(amount);
-
-      if (currentBalance < deductAmount) {
-        throw new Error('Insufficient virtual coins');
-      }
-
-      const newBalance = (currentBalance - deductAmount).toString();
-      const newVersion = wallet.version + 1;
-
-      // Update wallet balance
-      const updateRes = await client.query(
-        `UPDATE wallets SET balance = $1, version = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND version = $4 RETURNING *`,
-        [newBalance, newVersion, wallet.id, wallet.version]
-      );
-
-      if (updateRes.rowCount === 0) {
-        throw new Error('Concurrency conflict: wallet was updated concurrently');
-      }
-
-      // Record transaction
-      await client.query(
-        `INSERT INTO wallet_transactions (wallet_id, user_id, amount, type, transaction_type, reason, reference_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [wallet.id, userId, (-deductAmount).toString(), type, 'BET_DEBIT', reason, referenceId]
-      );
-
-      await client.query('COMMIT');
-      return updateRes.rows[0];
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+  /**
+   * Trừ xu cược — ủy quyền cho WalletService để đảm bảo ledger chuẩn + idempotency.
+   * @param {string} userId
+   * @param {number} amount
+   * @param {string} transactionType — TRANSACTION_TYPES value (mặc định BET_DEBIT)
+   * @param {string} reason
+   * @param {string} referenceId — dùng làm phần idempotency key
+   * @returns {object} wallet row sau khi trừ
+   */
+  async deductBalance(userId, amount, transactionType = TRANSACTION_TYPES.BET_DEBIT, reason = null, referenceId = null) {
+    const result = await WalletService._executeTransaction({
+      userId,
+      amount: -Math.abs(amount),
+      transactionType,
+      idempotencyKey: referenceId ? `deduct:${userId}:${referenceId}` : null,
+      reason,
+      allowNegative: false,
+    });
+    return result.wallet;
   }
 
-  // Add balance with transaction support (e.g. winning bet, ad reward, admin grant)
-  async addBalance(userId, amount, type = 'bet_won', reason = null, referenceId = null) {
-    const client = await getClient();
-    try {
-      await client.query('BEGIN');
-
-      const walletRes = await client.query(`SELECT * FROM wallets WHERE user_id = $1 FOR UPDATE`, [userId]);
-      const wallet = walletRes.rows[0];
-
-      if (!wallet) {
-        throw new Error('Wallet not found');
-      }
-
-      const currentBalance = BigInt(wallet.balance);
-      const addAmount = BigInt(amount);
-
-      const newBalance = (currentBalance + addAmount).toString();
-      const newVersion = wallet.version + 1;
-
-      const updateRes = await client.query(
-        `UPDATE wallets SET balance = $1, version = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND version = $4 RETURNING *`,
-        [newBalance, newVersion, wallet.id, wallet.version]
-      );
-
-      if (updateRes.rowCount === 0) {
-        throw new Error('Concurrency conflict: wallet was updated concurrently');
-      }
-
-      await client.query(
-        `INSERT INTO wallet_transactions (wallet_id, user_id, amount, type, transaction_type, reason, reference_id) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [wallet.id, userId, addAmount.toString(), type, 'ROUND_PAYOUT', reason, referenceId]
-      );
-
-      await client.query('COMMIT');
-      return updateRes.rows[0];
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+  /**
+   * Cộng xu — ủy quyền cho WalletService để đảm bảo ledger chuẩn + idempotency.
+   * @param {string} userId
+   * @param {number} amount
+   * @param {string} transactionType — TRANSACTION_TYPES value (mặc định ROUND_PAYOUT)
+   * @param {string} reason
+   * @param {string} referenceId — dùng làm phần idempotency key
+   * @returns {object} wallet row sau khi cộng
+   */
+  async addBalance(userId, amount, transactionType = TRANSACTION_TYPES.ROUND_PAYOUT, reason = null, referenceId = null) {
+    const result = await WalletService._executeTransaction({
+      userId,
+      amount: Math.abs(amount),
+      transactionType,
+      idempotencyKey: referenceId ? `add:${userId}:${referenceId}` : null,
+      reason,
+      allowNegative: true,
+    });
+    return result.wallet;
   }
 
   async getTransactionHistory(walletId, limit = 20, offset = 0) {

@@ -30,14 +30,21 @@ export class RoomRepository extends Repository {
   }
 
   async addMember(roomId, userId, role = 'player') {
-    const res = await query(
-      `INSERT INTO room_members (room_id, user_id, role)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (room_id, user_id, left_at) DO NOTHING
-       RETURNING *`,
-      [roomId, userId, role]
-    );
-    return res.rows[0] || null;
+    try {
+      const res = await query(
+        `INSERT INTO room_members (room_id, user_id, role)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [roomId, userId, role]
+      );
+      return res.rows[0];
+    } catch (err) {
+      // idx_unique_active_membership: user đã có active membership ở phòng khác
+      if (err.code === '23505') {
+        return null;
+      }
+      throw err;
+    }
   }
 
   async removeMember(roomId, userId) {

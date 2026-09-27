@@ -40,18 +40,21 @@ export class WalletService {
       );
 
       if (existingTxn.rows.length === 0) {
+        // balance_before / balance_after phải lấy từ thực tế wallet
+        const balanceBefore = wallet.created_at === wallet.updated_at ? 0 : BigInt(wallet.balance) - BigInt(initialBalance);
+        const balanceAfter = BigInt(wallet.balance);
+
         await client.query(
           `INSERT INTO wallet_transactions 
-            (wallet_id, user_id, type, transaction_type, amount, balance_before, balance_after, reason, idempotency_key)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            (wallet_id, user_id, transaction_type, amount, balance_before, balance_after, reason, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             wallet.id,
             userId,
-            'initial_grant',
             TRANSACTION_TYPES.WELCOME,
             initialBalance,
-            0,
-            initialBalance,
+            balanceBefore.toString(),
+            balanceAfter.toString(),
             'Welcome initial virtual coins grant',
             idempotencyKey,
           ]
@@ -121,14 +124,19 @@ export class WalletService {
 
   /**
    * Admin cấp xu ảo (ADMIN_GRANT)
+   * @param {string} requestId — Mã lệnh chống lặp do caller cung cấp (bắt buộc).
+   *        Gửi lại cùng requestId sẽ trả kết quả cũ, KHÔNG cấp xu lần nữa.
    */
-  static async adminGrant({ userId, amount, actorId, reason = 'Admin grant' }, clientOverride = null) {
+  static async adminGrant({ userId, amount, actorId, requestId, reason = 'Admin grant' }, clientOverride = null) {
+    if (!requestId) {
+      throw new Error('adminGrant requires a requestId for idempotency');
+    }
     return WalletService._executeTransaction({
       userId,
       amount: BigInt(amount),
       transactionType: TRANSACTION_TYPES.ADMIN_GRANT,
       actorId,
-      idempotencyKey: `admin_grant:${userId}:${Date.now()}:${Math.random()}`,
+      idempotencyKey: `admin_grant:${userId}:${requestId}`,
       reason,
       allowNegative: true,
       clientOverride,
@@ -211,14 +219,13 @@ export class WalletService {
       // 4. Insert ledger record
       const txnRes = await client.query(
         `INSERT INTO wallet_transactions
-          (wallet_id, user_id, type, transaction_type, amount, balance_before, balance_after,
+          (wallet_id, user_id, transaction_type, amount, balance_before, balance_after,
            actor_id, room_id, round_id, reward_session_id, idempotency_key, reason, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *`,
         [
           wallet.id,
           userId,
-          transactionType.toLowerCase(),
           transactionType,
           delta.toString(),
           balanceBefore.toString(),
