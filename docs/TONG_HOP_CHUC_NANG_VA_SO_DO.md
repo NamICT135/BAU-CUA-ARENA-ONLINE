@@ -1,6 +1,6 @@
 # Tổng hợp chức năng và sơ đồ hoạt động — Bầu Cua Victory
 
-> Cập nhật theo mã nguồn hiện tại ngày 19/09/2026. Tài liệu này mô tả chức năng đã có, cách các phần phối hợp với nhau, giới hạn hiện tại và các điểm cần hoàn thiện.
+> Cập nhật theo mã nguồn ngày 21/09/2026. `npm test` chạy lại ngày này: 18/18 đạt. Các thay đổi được mô tả là đã có trong mã nguồn; không đồng nghĩa đã kiểm chứng trên mọi điện thoại hay trên máy chủ Internet. Kế hoạch nâng cấp và tiêu chí nghiệm thu ở mục 13–16.
 
 ## 1. Tổng quan dự án
 
@@ -68,15 +68,16 @@ Nguyên tắc quan trọng: frontend chỉ gửi yêu cầu và hiển thị sna
 | Header | Avatar, tên, số dư xu, nút cộng xu cho host, logo, toàn màn hình, âm thanh, luật chơi và cài đặt |
 | Cột trái | Danh sách người chơi thật kết hợp các VIP mẫu, cấp VIP, avatar và số xu rút gọn |
 | Cột phải | 20 ô lịch sử kết quả xúc xắc gần nhất và nút Thống kê |
-| Sân khấu | Đồng hồ đếm ngược, thanh tiến trình, bát/đĩa, ba xúc xắc và trạng thái phiên |
+| Sân khấu | Đồng hồ đếm ngược, thanh tiến trình và trạng thái phiên; bát/đĩa hiện trên lớp phủ giữa màn hình khi khóa cược |
 | Bàn cược | Sáu vùng bấm khớp với linh vật có sẵn trên ảnh bàn nền |
 | Thanh đáy | Chat, bộ chip, All-in, Xóa cược và Đặt cược |
-| Hộp thoại | Mở bát, luật chơi, thống kê, cài đặt/quản trị và xác nhận đặt lại phòng |
+| Hộp thoại/lớp phủ | Mở bát kéo 360°, luật chơi, thống kê, cài đặt/quản trị và xác nhận đặt lại phòng |
 
 ### 3.3. Cược
 
 - Chọn chip rồi chạm trực tiếp vào linh vật để đặt cược.
-- Bộ chip giao diện hiện dùng: 1K, 5K, 10K, 50K và 100K.
+- Bộ chip giao diện hiện dùng: 1K, 5K, 10K, 50K, 100K, 500K; tiếp theo là ALL IN. Ảnh chip được ánh xạ theo mệnh giá.
+- Số dư khởi tạo vẫn là 100.000 xu; muốn cược 500K cần thắng thêm hoặc được host cấp xu.
 - Nút All-in đặt toàn bộ số xu còn khả dụng vào linh vật được chọn.
 - Mỗi linh vật hiển thị cược cá nhân và tổng cược toàn phòng.
 - Chip ảnh được xếp chồng trên đúng vùng linh vật đã chọn.
@@ -86,9 +87,11 @@ Nguyên tắc quan trọng: frontend chỉ gửi yêu cầu và hiển thị sna
   - Vòng đang ở trạng thái nhận cược.
   - Người chơi đủ điều kiện tham gia.
   - Số cược là số nguyên dương.
-  - Tổng cược không vượt số dư.
+  - Cược mới không vượt số dư khả dụng.
   - Không vượt giới hạn số học an toàn của phòng.
-- Cược chỉ được trừ/thanh toán khi server chốt kết quả; trong lúc cược, server giữ giới hạn bằng tổng cược đang chờ.
+- Server trừ tiền ngay khi chấp nhận `bet:add` rồi gửi số dư mới cho người chơi. Chọn chip đơn thuần chưa đặt cược; chạm linh thú mới gửi lệnh.
+- Xóa cược cá nhân hoặc host hủy ván chưa lắc sẽ hoàn toàn bộ tiền đã cược tương ứng.
+- `balanceMode: available` cho biết server gửi ví đã trừ cược. Giao diện có lớp tương thích với server cũ; cần đồng bộ phiên bản frontend/backend khi vận hành.
 
 ### 3.4. Chu kỳ ván tự động
 
@@ -103,12 +106,12 @@ Nguyên tắc quan trọng: frontend chỉ gửi yêu cầu và hiển thị sna
 
 ### 3.5. Bát, đĩa và xúc xắc
 
-- Bát trên sân khấu che xúc xắc khi đang lắc và trước khi mở.
+- Lớp mở bát ở giữa màn hình làm mờ nền phía sau, dùng đĩa `bowl-tray1.png` và ảnh bát `bowl-tray2.png`.
 - Kết quả gồm ba linh vật chung cho toàn phòng.
-- Hộp thoại mở bát hỗ trợ:
-  - Kéo bát bằng chuột hoặc cảm ứng.
-  - Thanh trượt nâng bát.
-  - Nút mở bát nhanh.
+- Lớp mở bát hỗ trợ:
+  - Đĩa cố định, bát trượt trên/dưới/trái/phải và theo các hướng chéo bằng chuột hoặc cảm ứng.
+  - Ghi nhận điểm chạm ban đầu và giữ pointer để kéo từ từ; đã bổ sung CSS tránh bát nhảy khi nhấn giữ.
+  - Thả trước ngưỡng mở thì bát trở về; qua ngưỡng thì hoàn tất mở. Bàn phím có thể kích hoạt mở.
   - Tự mở gần cuối thời gian kết quả để người chơi không bỏ lỡ phiên tiếp theo.
 - Xúc xắc và kết quả thanh toán luôn lấy từ server; thao tác mở bát chỉ là phần trình bày.
 - Ô linh vật thắng được đánh dấu sau khi bát đã mở.
@@ -127,7 +130,9 @@ Tiền nhận đã gồm tiền cược hoàn lại. Công thức server:
 ```text
 Tổng nhận = Σ [cược linh vật × (số lần xuất hiện + 1)] với linh vật xuất hiện ít nhất một lần
 Lãi/lỗ = Tổng nhận − Tổng cược
-Số dư mới = Số dư cũ + Lãi/lỗ
+Khi cược: Số dư khả dụng = Số dư trước cược − Tổng cược
+Khi chốt: Số dư cuối = Số dư khả dụng + Tổng nhận
+Tương đương: Số dư cuối = Số dư trước cược + Lãi/lỗ
 ```
 
 ### 3.7. Kết quả, lịch sử và thống kê người chơi
@@ -171,6 +176,8 @@ Nếu host mất kết nối, server chờ khoảng 5 giây rồi tự chuyển 
 ### 3.10. Toàn màn hình và điện thoại
 
 - Giao diện sân khấu giữ tỉ lệ 16:9.
+- Chế độ fullscreen cũng giữ 16:9; phần màn hình dư được lấp bằng background mờ, không ép bàn giãn theo màn hình điện thoại.
+- Logo `logo1.png` giữ điểm neo trên tay nhân vật, có kích thước thích ứng và animation lên/xuống trong CSS.
 - Có màn hình nhắc xoay ngang trên điện thoại dọc.
 - Hỗ trợ Fullscreen API chuẩn và các biến thể WebKit cũ.
 - Thử khóa hướng ngang khi trình duyệt cho phép.
@@ -239,12 +246,12 @@ sequenceDiagram
     S->>G: handle(socketId, bet:add, payload)
     G->>G: Xác minh phiên, vòng, hạn cược, số dư và requestId
     alt Hợp lệ
-        G->>R: Cộng cược cá nhân
+        G->>R: Trừ số dư khả dụng và cộng cược cá nhân
         G->>R: Tăng revision
         G-->>S: ack {ok: true, state cá nhân hóa}
         S-->>C: ack
         S-->>C: room:state khi phòng thay đổi
-        C->>C: Vẽ chip lên linh vật và cập nhật tổng cược
+        C->>C: Vẽ chip, cập nhật tổng cược và số dư
     else Không hợp lệ
         G-->>S: {ok: false, error}
         S-->>C: ack lỗi tiếng Việt
@@ -290,7 +297,7 @@ flowchart TD
 - `session:replaced`: phiên này đã được mở bởi kết nối mới.
 - Acknowledgment cho mọi lệnh: `{ ok: true, state, session? }` hoặc `{ ok: false, error }`.
 
-Server không gửi token vào broadcast và không gửi cược chi tiết của người khác; mọi người chỉ thấy tổng cược toàn bàn.
+Server không gửi token vào broadcast và không gửi phân bố cược theo từng linh vật của người khác. Snapshot có tổng cược của từng người, tổng cược toàn bàn và lịch sử kết quả thanh toán.
 
 ## 8. API HTTP
 
@@ -308,7 +315,7 @@ Server không gửi token vào broadcast và không gửi cược chi tiết c�
 |---|---|
 | `index.html` | Khung sảnh, bàn game, các nút và dialog |
 | `src/main.js` | Tương tác UI, render trạng thái, Socket.IO, cược, âm thanh, fullscreen và quản trị |
-| `src/bowl.js` | Logic trình bày mở bát, kéo/nâng bát và tự công bố |
+| `src/bowl.js` | Logic lớp phủ mở bát, kéo bát 360° và tự công bố |
 | `src/arena.css` | Toàn bộ bố cục casino, responsive, chip, bàn, bát và chế độ ngang |
 | `src/style.css` | Style nền tảng và một số thành phần dùng chung |
 | `server/app.js` | HTTP API, static files, Socket.IO, rate limit và origin policy |
@@ -354,10 +361,11 @@ npm start
 
 ## 11. Trạng thái kiểm thử hiện tại
 
-- `npm run build`: đạt.
-- `npm test`: 18 test, hiện đạt 9 và lỗi 9.
-- Nguyên nhân chính của các test lỗi: `game-config.json` đang đặt số dư ban đầu là `100000`, trong khi nhiều assertion cũ vẫn mong đợi `1000`. Một test giả mạo số cược cũng dựa trên giới hạn số dư cũ nên không còn đúng với cấu hình mới.
-- Cần cập nhật test theo số dư mới hoặc đưa cấu hình về giá trị cũ trước khi xem bộ test là xanh hoàn toàn.
+- `npm test` ngày 21/09/2026: **18/18 đạt**, gồm luật trả thưởng, phòng tự động, phân quyền, kết nối lại và 20 kết nối Socket.IO.
+- Các assertion về ví ban đầu đã cập nhật theo cấu hình; test chip được cấp đủ xu để kiểm tra cả 500K.
+- Bản build ở lần sửa fullscreen trước đã thành công. Lần tổng hợp này không thay đổi mã chạy game.
+- Các test hiện tại chủ yếu kiểm tra server; chưa chứng minh mọi thao tác kéo bát, khay chip và fullscreen trên Safari iPhone thật.
+- Ảnh kiểm tra 852×393 ở lần trước chỉ chụp sảnh. Sảnh có phần trên/dưới bị cắt trong ảnh, nên cần nghiệm thu thêm chiều cao form; chưa thể coi đó là bằng chứng toàn bộ bàn cược đã đạt trên điện thoại.
 
 ## 12. Các phần đang là mô phỏng hoặc chưa hoàn thiện
 
@@ -365,22 +373,39 @@ npm start
 2. Popup Thống kê linh vật đang sinh phần trăm ngẫu nhiên 15–19%; chưa tính từ lịch sử thật.
 3. Danh sách VIP có thêm người chơi mẫu để trang trí khi phòng ít người; đây không phải người thật.
 4. Số online trên giao diện đang hiển thị tối thiểu 123 để tạo cảm giác đông; không phản ánh chính xác số kết nối thật.
-5. `game-config.json` có bốn chip `10, 50, 100, 500`, nhưng frontend yêu cầu đúng năm chip mới dùng cấu hình; vì vậy hiện tự chuyển sang bộ mặc định `1K, 5K, 10K, 50K, 100K`.
+5. Nút “ĐẶT CƯỢC” hiện chỉ phát âm thanh và thông báo, không gửi một lệnh xác nhận mới. Cược thực được gửi khi chạm linh thú; cần làm rõ hành vi để tránh báo thành công khi chưa có cược.
 6. README/tài liệu cũ ghi kết quả hiển thị 5 giây, trong khi mã server hiện dùng 12 giây.
-7. Manifest PWA đã có nhưng chưa có service worker, nên chưa hỗ trợ chơi offline.
+7. Manifest PWA đã có nhưng chưa có service worker để cache giao diện. Trò chơi nhiều người vẫn cần kết nối server, kể cả khi bổ sung cache offline.
 8. Chưa có tài khoản, mật khẩu, cơ sở dữ liệu, lịch sử lâu dài hoặc đồng bộ nhiều server.
 9. Restart, redeploy hoặc server ngủ sẽ xóa toàn bộ phòng, phiên và lịch sử đang nằm trong RAM.
 10. Kết quả ngẫu nhiên dùng `crypto.randomInt`, nhưng chưa có cơ chế kiểm toán độc lập hoặc provably fair.
+11. Host có thể chọn kết quả demo áp dụng cho cả phòng; cờ demo bị loại khỏi lịch sử gửi cho khách. Cần tách chế độ demo và công khai nhãn để người chơi hiểu đúng.
+12. Server lưu lịch sử mới nhất ở đầu (`unshift`), nhưng giao diện trải phẳng rồi lấy `slice(-20)`. Khi đủ nhiều ván, phần hiển thị có thể lấy các kết quả cũ thay vì mới nhất.
+13. Lớp tương thích server cũ trừ tổng cược cả khi đã ở pha kết quả; cần giới hạn theo pha để tránh hiển thị trừ hai lần sau thanh toán trên server cũ.
+14. Host có thể đuổi người đang có cược ở pha betting; cần quy định rõ hoàn cược hoặc giữ người đó để thanh toán trước khi thu hồi phiên.
+15. Snapshot kết quả đã chứa xúc xắc và thanh toán trước khi mỗi người kéo bát. Che bát chỉ là hiệu ứng trình bày, không phải biện pháp bảo mật kết quả.
+16. Kiểm kê ngày 21/09/2026: 64 file trong `public/assets`, tổng 66.511.546 byte (khoảng 63,4 MiB). Đây là tổng tài nguyên trên đĩa, không phải dung lượng tải đầu trang; cần đo request thực tế trước khi tối ưu.
 
-## 13. Thứ tự nên hoàn thiện tiếp
+## 13. Kế hoạch ưu tiên để nâng chất lượng và điểm đánh giá
 
-1. Đồng bộ `initialBalance`, danh sách chip, README và toàn bộ test.
-2. Thay thống kê ngẫu nhiên bằng thống kê thực từ `room.history`.
-3. Hiển thị đúng số người online và phân biệt rõ VIP mẫu nếu vẫn muốn giữ phần trang trí.
-4. Xây dựng chat realtime hoặc ẩn nút Chat cho tới khi có chức năng.
-5. Kiểm thử thực tế trên iPhone Safari, Android Chrome và màn hình desktop phổ biến.
-6. Thêm cơ sở dữ liệu/Redis nếu cần lưu lâu dài hoặc chạy nhiều instance.
-7. Thêm giám sát lỗi, log có cấu trúc và đo tải trước khi mở cho nhiều phòng công khai.
+Chưa có rubric của giảng viên, nên chưa thể dự đoán hoặc cam kết điểm. Ưu tiên dưới đây dựa trên tính đúng đắn, trải nghiệm, kiến trúc và bằng chứng kiểm thử. Đây là kế hoạch đề xuất, chưa được triển khai trong lần tổng hợp này.
+
+| Mức | Công việc | Tiêu chí nghiệm thu |
+|---|---|---|
+| P0 — làm trước | Đồng bộ phiên bản web/server; có thông tin phiên bản tại health check; xử lý đúng ví server cũ theo pha | Không còn bộ chip cũ; cược, hoàn cược và trả thưởng trên hai thiết bị khớp nhau; reload không trừ lặp |
+| P0 | Làm rõ nút ĐẶT CƯỢC theo cơ chế chạm linh thú gửi ngay; thông báo thành công chỉ dựa trên phản hồi server | Chưa cược, mất mạng hoặc server từ chối đều không hiện “đã ghi nhận” |
+| P0 | Thống kê thật, số online thật, nhãn VIP mô phỏng rõ; sửa thứ tự lịch sử | Đối chiếu được số lần mỗi linh thú với dữ liệu ván; ván mới nhất xuất hiện đúng vị trí |
+| P0 | Tách phòng demo và phòng chơi ngẫu nhiên; quy định xử lý người bị đuổi khi còn cược | Cả phòng thấy nhãn demo trước khi cược; phòng thường từ chối lệnh ép kết quả; không mất cược do thu hồi phiên |
+| P1 — hoàn thiện trải nghiệm | Nghiệm thu sảnh, fullscreen, khay 6 chip + ALL IN và kéo bát trên thiết bị thật | iPhone Safari và Android Chrome dùng được cả dọc/ngang; form không bị cắt; chip/vòng chọn khớp linh thú |
+| P1 | Chat realtime có giới hạn độ dài, chống spam và hiển thị văn bản an toàn; hoặc ẩn nút khi chưa làm | Hai người gửi/nhận đúng phòng; nội dung nhập không trở thành HTML thực thi |
+| P1 | Tối ưu ảnh theo kích thước dùng thực tế, đo tải mạng và chuyển động | Giữ độ nét/alpha; ghi nhận tải trước/sau và độ trễ thao tác trên cùng thiết bị, cùng mạng |
+| P1 | Kiểm thử trình duyệt và tình huống mạng | Cược → trừ xu → xóa/hoàn; ALL IN; hết giờ; reconnect; kéo bát; đổi hướng đều có bằng chứng |
+| P2 — giá trị kiến trúc | Lưu phòng, ván và sổ giao dịch xu vào cơ sở dữ liệu; mỗi lệnh có khóa chống lặp | Restart phục hồi dữ liệu; một cược/một lần trả chỉ ghi một lần; xử lý ván dở theo quy tắc đã công bố |
+| P2 | Tách module cấu hình, cược, lịch sử, quản trị và hiển thị khỏi `main.js` | Các phần có trách nhiệm rõ, giữ nguyên hành vi và qua kiểm thử |
+| P2 | CI chạy test/build; log lỗi có cấu trúc, health check, cấu hình môi trường và hướng dẫn triển khai | Cài từ bản checkout sạch chạy được; lỗi truy được theo phòng/ván mà không ghi token bí mật |
+| P3 — trước buổi bảo vệ | Đồng bộ README, giao thức, sơ đồ, kết quả test và kịch bản demo | Không còn mô tả 5 giây, chip cũ, thanh nâng bát hoặc trả tiền cuối ván sai với bản demo |
+
+Không cần thêm tài khoản, bảng xếp hạng toàn hệ thống hay chạy nhiều server ngay nếu rubric không yêu cầu. Hoàn thiện P0/P1 trước giúp phần trình diễn đáng tin cậy hơn.
 
 ## 14. Tóm tắt luồng hoạt động
 
@@ -389,10 +414,10 @@ flowchart LR
     A[Tạo/vào phòng] --> B[Nhận snapshot cá nhân]
     B --> C[Chọn chip]
     C --> D[Chạm linh vật]
-    D --> E[Server xác minh và ghi cược]
+    D --> E[Server xác minh, trừ ví và ghi cược]
     E --> F[Hết giờ / host lắc]
     F --> G[Server sinh 3 kết quả]
-    G --> H[Tính tiền đúng một lần]
+    G --> H[Cộng tổng nhận đúng một lần]
     H --> I[Phát room:state cho từng người]
     I --> J[Mở bát và hiện kết quả]
     J --> K[Cập nhật số dư, thống kê, lịch sử]
@@ -400,3 +425,49 @@ flowchart LR
     L --> C
 ```
 
+## 15. Sơ đồ cơ chế tiền hiện tại
+
+Ví dụ ví có 100.000 xu, cược 10.000 xu vào Cua:
+
+```mermaid
+flowchart TD
+    A[Ví 100.000 xu] --> B[Server nhận cược 10.000 vào Cua]
+    B --> C[Ví còn 90.000; cược đang giữ 10.000]
+    C --> D{Diễn biến ván}
+    D -->|Xóa cược hoặc hủy ván trước khi lắc| E[Hoàn 10.000; ví 100.000]
+    D -->|Không ra Cua| F[Nhận 0; ví 90.000]
+    D -->|Ra 1 Cua| G[Nhận 20.000; ví 110.000]
+    D -->|Ra 2 Cua| H[Nhận 30.000; ví 120.000]
+    D -->|Ra 3 Cua| I[Nhận 40.000; ví 130.000]
+```
+
+## 16. Hồ sơ để trình bày thuyết phục
+
+### Khung tự đánh giá đề xuất, không phải điểm chấm thực tế
+
+| Nhóm | Trọng số gợi ý | Bằng chứng cần có |
+|---|---:|---|
+| Chức năng và tính đúng đắn | 30% | Demo hai thiết bị, cược/hoàn/thưởng chuẩn, số liệu thật |
+| Giao diện và trải nghiệm | 20% | Bàn không méo, vùng chạm đúng, sảnh vừa màn hình, bát kéo mượt |
+| Kiến trúc và tính nhất quán dữ liệu | 20% | Sơ đồ server quyết định, phân quyền, chống lặp, chính sách phục hồi |
+| Kiểm thử và vận hành | 15% | Test tự động, lỗi mạng, thiết bị thật, chạy lại từ cấu hình sạch |
+| Tài liệu và thuyết trình | 15% | Hướng dẫn khớp sản phẩm, kịch bản ngắn, video dự phòng, giải thích giới hạn |
+
+### Lộ trình theo mốc bàn giao
+
+1. **Mốc A — đúng chức năng:** hoàn tất P0; demo một chu kỳ cược và hoàn/thưởng, đối chiếu ví hai thiết bị.
+2. **Mốc B — hoàn chỉnh trải nghiệm:** hoàn tất phần thiết bị thật, thống kê/chat và tối ưu tài nguyên; ghi lại kết quả kiểm tra.
+3. **Mốc C — vững kỹ thuật:** bổ sung lưu trữ nếu phù hợp yêu cầu môn học, kiểm thử phục hồi, CI và log vận hành.
+4. **Mốc D — sẵn sàng bảo vệ:** bản chạy cố định, sơ đồ cập nhật, demo 7 phút, ảnh/video và phương án mạng dự phòng.
+
+### Kịch bản demo đề xuất
+
+- Tạo phòng trên máy tính, vào cùng phòng bằng điện thoại.
+- Chọn chip và cược: cho thấy số dư giảm ngay, rồi xóa cược để chứng minh hoàn xu.
+- Cược lại, hết giờ, kéo bát 360°; đối chiếu ba xúc xắc chung và tiền thưởng riêng.
+- Cho thấy lịch sử/thống kê từ dữ liệu thật sau khi hoàn thiện.
+- Reload cùng tab để minh họa khôi phục phiên; giải thích requestId và roundId bằng sơ đồ.
+- Nếu cần kết quả cố định để minh họa, dùng phòng demo có nhãn rõ; không mô tả đó là ngẫu nhiên.
+- Kết thúc bằng kết quả test, giới hạn đã biết và hướng phát triển.
+
+Trước khi dùng `docs/PRESENTATION.md`, cần sửa câu hiện tại cho rằng host không thể gửi kết quả tùy ý: mã nguồn đang cho phép host chọn kết quả demo. README cũng cần cập nhật đồng bộ trước buổi trình bày.

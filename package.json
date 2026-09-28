@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.js",
+    "dev:client": "vite",
+    "dev:server": "node server.js",
     "server": "node server.js",
     "prestart": "npm run build",
     "start": "node server.js",

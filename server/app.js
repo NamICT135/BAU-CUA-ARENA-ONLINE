@@ -4,6 +4,7 @@ import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { GameService } from './game.js';
+import { serveVideo } from './media.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const events = ['room:create', 'room:join', 'room:resume', 'room:sync', 'room:leave',
@@ -15,6 +16,7 @@ const mimeTypes = {
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
   '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4', '.webm': 'video/webm',
   '.webmanifest': 'application/manifest+json',
 };
 
@@ -81,6 +83,9 @@ export async function createGameServer(options = {}) {
       const actualRoot = await realpath(distRoot);
       const actualFile = await realpath(candidate);
       if (!actualFile.startsWith(`${actualRoot}${sep}`)) return sendJson(res, 404, { error: 'Not found' });
+      if (['.mp4', '.webm'].includes(extname(candidate))) {
+        return await serveVideo(req, res, actualFile, mimeTypes[extname(candidate)]);
+      }
       const content = await readFile(actualFile);
       res.writeHead(200, { 'Content-Type': mimeTypes[extname(candidate)], 'Content-Length': content.length, 'Cache-Control': 'no-cache' });
       res.end(req.method === 'HEAD' ? undefined : content);

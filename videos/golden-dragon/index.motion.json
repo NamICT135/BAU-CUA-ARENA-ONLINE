@@ -1,0 +1,1 @@
+{"duration":5,"assertions":[{"kind":"staysInFrame","selector":"#dragon-surface"},{"kind":"keepsMoving","withinSelector":"#root","maxStaticSec":1.5}]}

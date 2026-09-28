@@ -2,9 +2,13 @@ import { io } from 'socket.io-client';
 import './style.css';
 import './arena.css';
 import { createBowlReveal } from './bowl.js';
+import { countSymbolAppearances, HISTORY_ROW_LIMIT, recentHistoryRounds } from './history.js';
+import { createHub } from './hub.js';
+import { createAuth } from './auth.js';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
 const sessionKey = 'bau-cua-arena-session';
+const playerNameKey = 'bau-cua-player-name';
 const socket = io({ autoConnect: false, reconnection: true, reconnectionDelay: 700, reconnectionDelayMax: 4000 });
 const number = value => Number(value).toLocaleString('vi-VN');
 const signed = value => `${value > 0 ? '+' : ''}${number(value)}`;
@@ -44,6 +48,9 @@ let serverOffset = 0;
 let busy = false;
 let synced = false;
 let loadingConfig = false;
+let configRetryTimer = null;
+let configAttempts = 0;
+let controllersInitialized = false;
 let acceptingMembership = false;
 let sessionReplaced = false;
 let connectionEpoch = 0;
@@ -52,6 +59,10 @@ const chipButtons = [];
 let audioEnabled = true;
 let audioCtx = null;
 const backgroundMusic = ui['background-music'];
+
+// Hub and Auth module instances
+let hub = null;
+let auth = null;
 
 if (backgroundMusic) {
   backgroundMusic.volume = 0.6;
@@ -165,6 +176,20 @@ function rememberSession(session) {
 function forgetSession() {
   savedSession = null;
   try { sessionStorage.removeItem(sessionKey); } catch { }
+}
+
+function directPlayerName() {
+  const savedName = savedSession?.name?.trim();
+  if (savedName) return savedName;
+  try {
+    const remembered = sessionStorage.getItem(playerNameKey)?.trim();
+    if (remembered) return remembered.slice(0, 24);
+  } catch { }
+  return `Khách_${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function rememberPlayerName(name) {
+  try { sessionStorage.setItem(playerNameKey, name.slice(0, 24)); } catch { }
 }
 
 function element(tag, className, text) {
@@ -401,6 +426,8 @@ function applyState(next) {
   serverOffset = next.serverNow - Date.now();
 
   ui.home.hidden = true;
+  // Hide hub and show game arena
+  if (hub) hub.hideHub();
   ui.game.hidden = false;
   ui['room-code'].textContent = room.code;
 
@@ -549,37 +576,67 @@ function renderResults() {
   if (ui['stat-total-returned']) ui['stat-total-returned'].textContent = number(stats.totalReturned);
 }
 
-// Cột phải: Lịch sử phiên (Grid 4 cột x 5 hàng = 20 kết quả viên tròn)
+function visibleHistory() {
+  return room.history.filter(round => !bowl.covered() || round.id !== room.roundId);
+}
+
+function createHistoryToken(symbolId) {
+  const token = element('div', `history-token${symbolId ? '' : ' empty'}`);
+  if (!symbolId) {
+    token.setAttribute('aria-hidden', 'true');
+    return token;
+  }
+
+  const img = element('img');
+  img.src = `/assets/arena/symbol-${symbolId}.png`;
+  img.alt = symbols.get(symbolId)?.name || symbolId;
+  token.append(img);
+  return token;
+}
+
+// Cột phải: chín phiên gần nhất, mỗi hàng giữ nguyên ba linh thú của một phiên.
 function renderHistory() {
   const historyGrid = ui['history-grid'];
   if (!historyGrid) return;
 
-  const validRounds = room.history.filter(round => !bowl.covered() || round.id !== room.roundId);
-  const allDiceResults = [];
-  for (const r of validRounds) {
-    if (Array.isArray(r.dice)) {
-      for (const d of r.dice) allDiceResults.push(d);
+  const validRounds = visibleHistory();
+  const recentRounds = recentHistoryRounds(validRounds);
+  const rows = [];
+
+  for (let index = 0; index < HISTORY_ROW_LIMIT; index += 1) {
+    const round = recentRounds[index];
+    const row = element('div', `history-round${round ? '' : ' empty'}`);
+    row.setAttribute('role', 'listitem');
+
+    const dice = round?.dice.slice(0, 3) || [];
+    const names = dice.map(id => symbols.get(id)?.name || id);
+    row.setAttribute('aria-label', round
+      ? `Phiên ${round.roundNumber || index + 1}: ${names.join(', ')}`
+      : 'Chưa có kết quả');
+
+    for (let dieIndex = 0; dieIndex < 3; dieIndex += 1) {
+      row.append(createHistoryToken(dice[dieIndex]));
     }
+    rows.push(row);
   }
 
-  // Lấy 20 kết quả xúc xắc gần nhất
-  const recent20 = allDiceResults.slice(-20);
-  const totalSlots = 20;
-  const items = [];
-
-  for (let i = 0; i < totalSlots; i++) {
-    const symbolId = recent20[i];
-    const token = element('div', `history-token${symbolId ? '' : ' empty'}`);
-    if (symbolId) {
-      const img = element('img');
-      img.src = `/assets/arena/symbol-${symbolId}.png`;
-      img.alt = symbols.get(symbolId)?.name || symbolId;
-      token.append(img);
-    }
-    items.push(token);
+  historyGrid.replaceChildren(...rows);
+  if (ui['history-badge']) {
+    ui['history-badge'].textContent = String(validRounds.length);
+    ui['history-badge'].title = `${validRounds.length} phiên đang được lưu`;
   }
+}
 
-  historyGrid.replaceChildren(...items);
+function setHistoryExpanded(expanded) {
+  const panel = ui['history-panel'];
+  const toggle = ui['history-toggle'];
+  const sidebar = document.querySelector('.right-sidebar');
+  if (!panel || !toggle || !sidebar) return;
+
+  panel.hidden = !expanded;
+  sidebar.classList.toggle('is-collapsed', !expanded);
+  toggle.setAttribute('aria-expanded', String(expanded));
+  toggle.setAttribute('aria-label', expanded ? 'Thu gọn bảng lịch sử' : 'Mở bảng lịch sử');
 }
 
 function send(event, payload = {}) {
@@ -661,24 +718,35 @@ function clearRoom(message) {
   acceptingMembership = false;
   forgetSession();
   ui.game.hidden = true;
-  ui.home.hidden = false;
+  // Return to hub if player is known, else back to lobby
+  if (hub && (ui['player-name']?.value?.trim() || savedSession?.name)) {
+    hub.showHub(ui['player-name']?.value?.trim() || savedSession?.name || '');
+  } else {
+    ui.home.hidden = false;
+  }
   renderControls();
   notice(message);
 }
 
-async function enterRoom(event) {
+async function enterRoom(event, nameOverride, codeOverride) {
   if (!config || busy || acceptingMembership || !socket.connected || sessionReplaced) return;
-  const name = ui['player-name'].value.trim();
-  ui['player-name'].value = name;
-  if (!ui['player-name'].reportValidity()) return;
-  const code = ui['room-code-input'].value.trim().toUpperCase();
+  // Support name/code from hub cards (override lobby form values)
+  const name = nameOverride ?? ui['player-name'].value.trim();
+  if (nameOverride !== undefined) {
+    // Sync name back to the lobby form so existing logic sees it
+    if (ui['player-name']) ui['player-name'].value = name;
+  }
+  const code = codeOverride !== undefined ? codeOverride : ui['room-code-input'].value.trim().toUpperCase();
+  if (!nameOverride && !ui['player-name'].reportValidity()) return;
   if (event === 'room:join' && !/^[A-Z0-9]{6}$/.test(code)) {
     notice('Nhập mã phòng 6 ký tự.', true);
-    ui['room-code-input'].focus();
+    if (!nameOverride) ui['room-code-input'].focus();
     return;
   }
   busy = true;
   acceptingMembership = true;
+  // Hide hub while connecting
+  hub?.hideHub();
   renderControls();
   notice(event === 'room:create' ? 'Đang tạo phòng mới…' : 'Đang vào phòng…');
   const epoch = connectionEpoch;
@@ -691,6 +759,8 @@ async function enterRoom(event) {
   } catch (error) {
     if (epoch !== connectionEpoch) return;
     notice(error.message, true);
+    // Re-show hub on failure if player was in hub
+    if (hub) hub.showHub(name);
   } finally {
     if (epoch === connectionEpoch) { busy = false; acceptingMembership = false; renderControls(); }
   }
@@ -723,7 +793,14 @@ socket.on('connect', async () => {
   else {
     synced = false;
     renderControls();
-    notice('Sẵn sàng. Tạo phòng mới hoặc nhập mã.');
+    // Show hub if we already have a player name (returned from settings)
+    const existingName = ui['player-name']?.value?.trim();
+    if (hub && existingName) {
+      ui.home.hidden = true;
+      hub.showHub(existingName);
+    } else {
+      notice('Sẵn sàng. Tạo phòng mới hoặc nhập mã.');
+    }
   }
 });
 
@@ -759,8 +836,51 @@ function adminCommand(event, payload = {}, message) {
   return mutate(event, { ...payload, gameId: room.gameId, roundNumber: room.roundNumber }, message);
 }
 
-// Gán các sự kiện tương tác giao diện
-ui['lobby-form'].addEventListener('submit', event => { event.preventDefault(); enterRoom('room:create'); });
+ui['lobby-form'].addEventListener('submit', event => {
+  event.preventDefault();
+  const name = ui['player-name']?.value?.trim();
+  if (!name || name.length < 2) return;
+  // Prompt auth modal for login, registration, or guest demo play
+  if (auth) {
+    auth.openAuth('login', name);
+  } else if (hub) {
+    ui.home.hidden = true;
+    hub.showHub(name);
+  } else {
+    enterRoom('room:create');
+  }
+});
+
+// Click hub player chip to access account authentication
+const playerChip = document.querySelector('.hub-player-chip');
+if (playerChip) {
+  playerChip.style.cursor = 'pointer';
+  playerChip.setAttribute('role', 'button');
+  playerChip.setAttribute('tabindex', '0');
+  playerChip.setAttribute('aria-label', 'Đăng nhập hoặc quản lý tài khoản');
+  const openPlayerAuth = () => {
+    if (auth) auth.openAuth('login', ui['player-name']?.value?.trim() || '');
+  };
+  playerChip.addEventListener('click', openPlayerAuth);
+  playerChip.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openPlayerAuth();
+    }
+  });
+}
+
+// Top-of-hub account actions use the same accessible auth dialog.
+[
+  ['hub-auth-register', 'register'],
+  ['hub-auth-login', 'login'],
+  ['hub-auth-forgot', 'forgot'],
+].forEach(([buttonId, initialView]) => {
+  ui[buttonId]?.addEventListener('click', () => {
+    auth?.openAuth(initialView, ui['player-name']?.value?.trim() || '');
+  });
+});
+
 ui['join-room'].addEventListener('click', () => enterRoom('room:join'));
 ui['room-code-input'].addEventListener('input', () => { ui['room-code-input'].value = ui['room-code-input'].value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
 ui['room-code-input'].addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); enterRoom('room:join'); } });
@@ -841,8 +961,13 @@ function syncAppViewport() {
   const viewport = window.visualViewport;
   const width = Math.round(viewport?.width || document.documentElement.clientWidth || window.innerWidth);
   const height = Math.round(viewport?.height || document.documentElement.clientHeight || window.innerHeight);
+  const forceLandscape = document.body.classList.contains('force-landscape') && height > width;
+  const stageWidth = forceLandscape ? height : width;
+  const stageHeight = forceLandscape ? width : height;
+  const stageScale = Math.min(stageWidth / 1280, stageHeight / 720);
   document.documentElement.style.setProperty('--app-viewport-width', `${width}px`);
   document.documentElement.style.setProperty('--app-viewport-height', `${height}px`);
+  document.documentElement.style.setProperty('--stage-scale', String(Math.max(stageScale, 0.01)));
 }
 
 async function exitGameFullscreen() {
@@ -950,17 +1075,26 @@ if (ui['close-rules'] && ui['rules-dialog']) {
   ui['close-rules'].addEventListener('click', () => ui['rules-dialog'].close());
 }
 
+if (ui['history-toggle']) {
+  ui['history-toggle'].addEventListener('click', () => {
+    const expanded = ui['history-toggle'].getAttribute('aria-expanded') === 'true';
+    setHistoryExpanded(!expanded);
+  });
+}
+
 if (ui['stats-toggle-btn'] && ui['stats-dialog']) {
   ui['stats-toggle-btn'].addEventListener('click', () => {
-    // Render tỷ lệ các linh vật trong modal thống kê
+    // Đếm số lần xuất hiện thực tế trong phần lịch sử máy chủ đang lưu.
     const statsContainer = ui['stats-symbols-bars'];
     if (statsContainer) {
-      statsContainer.replaceChildren(...['nai', 'bau', 'ga', 'ca', 'cua', 'tom'].map(id => {
+      const symbolIds = ['nai', 'bau', 'ga', 'ca', 'cua', 'tom'];
+      const appearanceCounts = countSymbolAppearances(visibleHistory(), symbolIds);
+      statsContainer.replaceChildren(...symbolIds.map(id => {
         const item = element('div', 'stat-item');
         const img = element('img');
         img.src = `/assets/arena/symbol-${id}.png`;
         img.alt = symbols.get(id)?.name || id;
-        const val = element('div', 'stat-val', `${Math.floor(15 + Math.random() * 5)}%`);
+        const val = element('div', 'stat-val', `${number(appearanceCounts[id])} lần`);
         item.append(img, val);
         return item;
       }));
@@ -1036,21 +1170,70 @@ if (ui['leave-room']) {
   });
 }
 
-// Khởi động
-async function initialize() {
-  if (loadingConfig) return;
+function validConfig(value) {
+  return value && Array.isArray(value.chips) && value.chips.length > 0 &&
+    Array.isArray(value.symbols) && value.symbols.length === 6;
+}
+
+async function loadConfig() {
+  if (loadingConfig || config) return;
   loadingConfig = true;
+  clearTimeout(configRetryTimer);
+  notice(configAttempts ? 'Đang kết nối lại máy chủ phòng…' : 'Đang tải cấu hình phòng…');
+  renderControls();
+
   try {
-    const res = await fetch('/api/config');
-    config = await res.json();
+    const res = await fetch('/api/config', { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const nextConfig = await res.json();
+    if (!validConfig(nextConfig)) throw new Error('Cấu hình phòng không hợp lệ.');
+    config = nextConfig;
+    configAttempts = 0;
     symbols = new Map(config.symbols.map(s => [s.id, s]));
     buildBoard();
     socket.connect();
   } catch (err) {
-    notice('Chưa tải được cấu hình phòng.', true);
+    configAttempts += 1;
+    const retryDelay = Math.min(5000, 700 * (2 ** Math.min(configAttempts - 1, 3)));
+    notice('Chưa tải được cấu hình phòng. Đang tự kết nối lại…', true);
+    configRetryTimer = setTimeout(loadConfig, retryDelay);
   } finally {
     loadingConfig = false;
+    renderControls();
   }
+}
+
+// Khởi động
+async function initialize() {
+  if (controllersInitialized) return;
+  controllersInitialized = true;
+
+  // Initialize auth module controller
+  auth = createAuth({
+    onAuthenticated: ({ displayName }) => {
+      if (ui['player-name']) ui['player-name'].value = displayName;
+      rememberPlayerName(displayName);
+      ui.home.hidden = true;
+      if (hub) hub.showHub(displayName);
+    }
+  });
+
+  // Initialize hub immediately (before config) so the lobby can transition to it
+  hub = createHub({
+    enterRoom,
+    socket,
+    audioEnabled: () => audioEnabled,
+    notice,
+  });
+
+  // The product now opens directly in the game hub. Keep the former entry form
+  // in the DOM for room/session compatibility, but never present it as a gate.
+  const playerName = directPlayerName();
+  if (ui['player-name']) ui['player-name'].value = playerName;
+  ui.home.hidden = true;
+  hub.showHub(playerName);
+
+  await loadConfig();
 }
 
 const invitation = new URLSearchParams(location.search).get('room')?.toUpperCase();
