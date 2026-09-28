@@ -5,7 +5,6 @@ import { createBowlReveal } from './bowl.js';
 import { countSymbolAppearances, HISTORY_ROW_LIMIT, recentHistoryRounds } from './history.js';
 import { createHub } from './hub.js';
 import { createAuth } from './auth.js';
-import { initTetAmbient } from './tet-ambient.js';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
 const sessionKey = 'bau-cua-arena-session';
@@ -1655,7 +1654,6 @@ async function loadConfig() {
     configAttempts = 0;
     symbols = new Map(config.symbols.map(s => [s.id, s]));
     buildBoard();
-    initTetAmbient();
     socket.connect();
   } catch (err) {
     configAttempts += 1;
