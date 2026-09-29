@@ -4,17 +4,19 @@ import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { GameService } from './game.js';
+import { serveVideo } from './media.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const events = ['room:create', 'room:join', 'room:resume', 'room:sync', 'room:leave',
   'round:open', 'bet:add', 'bet:clear', 'round:shake', 'room:reset',
   'host:pause', 'host:lock', 'host:grant', 'host:kick', 'host:transfer', 'host:cancel', 'host:result',
-  'host:betting-duration'];
+  'host:betting-duration', 'chat:send'];
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
   '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4', '.webm': 'video/webm',
   '.webmanifest': 'application/manifest+json',
 };
 
@@ -165,6 +167,9 @@ export async function createGameServer(options = {}) {
       const actualRoot = await realpath(distRoot);
       const actualFile = await realpath(candidate);
       if (!actualFile.startsWith(`${actualRoot}${sep}`)) return sendJson(res, 404, { error: 'Not found' });
+      if (['.mp4', '.webm'].includes(extname(candidate))) {
+        return await serveVideo(req, res, actualFile, mimeTypes[extname(candidate)]);
+      }
       const content = await readFile(actualFile);
       res.writeHead(200, { 'Content-Type': mimeTypes[extname(candidate)], 'Content-Length': content.length, 'Cache-Control': 'no-cache' });
       res.end(req.method === 'HEAD' ? undefined : content);
@@ -196,6 +201,7 @@ export async function createGameServer(options = {}) {
   game = new GameService(config, {
     ...options,
     onState: (socketId, state) => io.to(socketId).emit('room:state', state),
+    onChatMessage: (socketId, message) => io.to(socketId).emit('chat:message', message),
     onKick: socketId => io.to(socketId).emit('room:kicked'),
     onReplace: socketId => {
       const oldSocket = io.sockets.sockets.get(socketId);

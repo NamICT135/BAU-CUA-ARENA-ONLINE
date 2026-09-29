@@ -20,6 +20,8 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500&family=Cinzel:wght@600;700;800;900&display=swap"
     rel="stylesheet">
+  <link rel="stylesheet" href="/src/hub.css" />
+  <link rel="stylesheet" href="/src/auth.css" />
 </head>
 
 <body>
@@ -41,45 +43,10 @@
   <div class="arcade-viewport">
     <div class="arcade-stage" id="arcade-stage">
 
-      <!-- LỚP KHÔNG KHÍ TẾT ĐỘNG: HOA RƠI, PHÁO HOA BẦU TRỜI & ĐÈN LỒNG ĐUNG ĐƯA -->
-      <div id="tet-ambient-layer" class="tet-ambient-layer" aria-hidden="true">
-        <canvas id="tet-ambient-canvas" class="tet-ambient-canvas"></canvas>
-        <div class="tet-lantern-wrap lantern-left">
-          <div class="lantern-string"></div>
-          <div class="tet-lantern">
-            <div class="lantern-cap top"></div>
-            <div class="lantern-body">
-              <div class="lantern-glow"></div>
-              <span class="lantern-char">PHÚC</span>
-              <div class="lantern-ribs"></div>
-            </div>
-            <div class="lantern-cap bottom"></div>
-            <div class="lantern-tassel">
-              <div class="tassel-knot"></div>
-              <div class="tassel-threads"></div>
-            </div>
-          </div>
-        </div>
-        <div class="tet-lantern-wrap lantern-right">
-          <div class="lantern-string"></div>
-          <div class="tet-lantern">
-            <div class="lantern-cap top"></div>
-            <div class="lantern-body">
-              <div class="lantern-glow"></div>
-              <span class="lantern-char">LỘC</span>
-              <div class="lantern-ribs"></div>
-            </div>
-            <div class="lantern-cap bottom"></div>
-            <div class="lantern-tassel">
-              <div class="tassel-knot"></div>
-              <div class="tassel-threads"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       <!-- GIAO DIỆN SẢNH (LOBBY) TRƯỚC KHI VÀO PHÒNG -->
-      <section id="home" class="lobby-overlay" aria-labelledby="lobby-heading">
+      <section id="home" class="lobby-overlay" aria-labelledby="lobby-heading" hidden>
         <div class="lobby-box">
           <div class="lobby-brand">
             <img src="/assets/arena/logo1.png" alt="Bầu Cua" class="lobby-logo" width="2079" height="756"
@@ -110,6 +77,191 @@
           </div>
         </div>
       </section>
+
+      <!-- =====================================================
+           GAME HUB — post-login main menu (shown after name entry)
+           ===================================================== -->
+      <section id="hub" class="hub-view" hidden tabindex="-1" aria-labelledby="hub-heading">
+        <!-- Background layers -->
+        <div class="hub-bg" aria-hidden="true">
+          <div class="hub-bg-img"></div>
+          <div class="hub-vignette"></div>
+          <canvas id="hub-particles" class="hub-particles" aria-hidden="true"></canvas>
+        </div>
+
+        <!-- Account entry bar inspired by the reference lobby. The existing
+             auth dialog remains the single source of truth for all flows. -->
+        <section class="hub-auth-banner" aria-label="Tài khoản Bầu Cua Arena">
+          <div class="hub-auth-actions">
+            <div class="hub-auth-brand">
+              <img src="/assets/arena/logo1.png" alt="Bầu Cua Arena" class="hub-auth-logo" width="2079"
+                height="756" decoding="async" fetchpriority="high" />
+            </div>
+            <button id="hub-auth-register" type="button"
+              class="hub-auth-button hub-auth-button--register">ĐĂNG KÝ</button>
+            <button id="hub-auth-login" type="button"
+              class="hub-auth-button hub-auth-button--login">ĐĂNG NHẬP</button>
+            <button id="hub-auth-forgot" type="button" class="hub-auth-forgot">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+              </svg>
+              <span>QUÊN MẬT KHẨU</span>
+            </button>
+          </div>
+          <div class="hub-auth-underbar">
+            <p class="hub-auth-message">Bầu Cua Arena là game bầu cua truyền thống tiền trong game là chip 100% tiền ảo không nạp rút</p>
+            <div class="hub-header-actions" aria-label="Tiện ích">
+              <button id="hub-sound-toggle" type="button" class="hub-icon-btn" aria-label="Âm thanh"
+                aria-pressed="true" title="Âm thanh">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </button>
+              <button id="hub-settings-btn" type="button" class="hub-icon-btn" aria-label="Cài đặt" title="Cài đặt">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Four animated game cards -->
+        <main class="hub-cards-stage" id="hub-heading" aria-label="Chọn chế độ chơi">
+          <h1 class="sr-only">Bầu Cua Victory — Chọn Chế Độ Chơi</h1>
+
+          <!-- Card 1: Chơi nhanh -->
+          <button id="hub-card-quick" type="button" class="hub-card hub-card--quick" aria-label="Chơi nhanh — tham gia ngay" data-card="quick">
+            <div class="hub-card-inner">
+              <div class="hub-card-frame" aria-hidden="true"></div>
+              <!-- Artwork layers -->
+              <div class="hub-card-art" aria-hidden="true">
+                <div class="hub-layer hub-layer--character hub-layer--dragon">
+                  <img src="/assets/hub/quick-play-dragon-poster.webp" alt="" class="hub-dragon-poster" width="576" height="800" draggable="false" />
+                  <video id="hub-dragon-video" class="hub-dragon-video" data-src="/assets/hub/quick-play-dragon-loop.mp4" data-webm="/assets/hub/quick-play-dragon-loop.webm" data-force-motion="true" data-playback-rate="2.5" poster="/assets/hub/quick-play-dragon-poster.webp" width="576" height="800" preload="none" muted loop playsinline disablepictureinpicture disableremoteplayback tabindex="-1" aria-hidden="true"></video>
+                </div>
+              </div>
+              <!-- Label -->
+              <div class="hub-card-label hub-card-label--dragon">
+                <span class="hub-card-title" data-text="Chơi nhanh">Chơi nhanh</span>
+                <span class="hub-card-sub">Vào bàn ngay</span>
+              </div>
+              <!-- Loading state -->
+              <div class="hub-card-loader" aria-hidden="true"><span class="hub-spinner"></span></div>
+            </div>
+          </button>
+
+          <!-- Card 2: Chơi với bạn -->
+          <button id="hub-card-friend" type="button" class="hub-card hub-card--friend" aria-label="Chơi với bạn — tạo hoặc vào phòng bạn bè" data-card="friend">
+            <div class="hub-card-inner">
+              <div class="hub-card-frame" aria-hidden="true"></div>
+              <div class="hub-card-art" aria-hidden="true">
+                <img src="/assets/hub/friends-lion-poster.webp" alt="" class="hub-lion-poster" draggable="false" />
+                <video id="hub-lion-video" class="hub-lion-video"
+                  poster="/assets/hub/friends-lion-poster.webp"
+                  data-webm="/assets/hub/friends-lion-loop.webm"
+                  data-src="/assets/hub/friends-lion-loop.mp4"
+                  data-force-motion="true" data-playback-rate="1"
+                  muted loop playsinline preload="none" tabindex="-1" disablepictureinpicture></video>
+              </div>
+              <div class="hub-card-label">
+                <span class="hub-card-title">Chơi với bạn</span>
+                <span class="hub-card-sub">Tạo / Vào phòng</span>
+              </div>
+              <div class="hub-card-loader" aria-hidden="true"><span class="hub-spinner"></span></div>
+            </div>
+          </button>
+
+          <!-- Card 3: Chọn bàn -->
+          <button id="hub-card-table" type="button" class="hub-card hub-card--table" aria-label="Chọn bàn — xem danh sách phòng" data-card="table">
+            <div class="hub-card-inner">
+              <div class="hub-card-frame" aria-hidden="true"></div>
+              <div class="hub-card-art" aria-hidden="true">
+                <div class="hub-card-glow hub-card-glow--table"></div>
+                <div class="hub-layer hub-layer--table-img">
+                  <img src="/assets/hub/choose-table-v1.jpg" alt="" class="hub-table-img" draggable="false" />
+                  <video id="hub-table-video" class="hub-table-video"
+                    data-src="/assets/hub/choose-table-lion.mp4"
+                    data-force-motion="true"
+                    poster="/assets/hub/choose-table-v1.jpg"
+                    muted loop playsinline preload="none" tabindex="-1"
+                    disablepictureinpicture disableremoteplayback aria-hidden="true"></video>
+                </div>
+              </div>
+              <div class="hub-card-label">
+                <span class="hub-card-title">Chọn bàn</span>
+                <span class="hub-card-sub">Xem danh sách</span>
+              </div>
+              <div class="hub-card-loader" aria-hidden="true"><span class="hub-spinner"></span></div>
+            </div>
+          </button>
+
+          <!-- Card 4: Game khác -->
+          <button id="hub-card-other" type="button" class="hub-card hub-card--other" aria-label="Game khác — sắp ra mắt" data-card="other">
+            <div class="hub-card-inner">
+              <div class="hub-card-frame" aria-hidden="true"></div>
+              <div class="hub-card-art" aria-hidden="true">
+                <div class="hub-card-glow hub-card-glow--phoenix"></div>
+                <div class="hub-layer hub-layer--sun" aria-hidden="true"><span class="hub-phoenix-sun"></span></div>
+                <div class="hub-layer hub-layer--character hub-layer--phoenix">
+                  <img src="/assets/hub/other-games-phoenix-v1.jpg" alt="" class="hub-phoenix-img" draggable="false" />
+                  <span class="hub-phoenix-flare" aria-hidden="true"></span>
+                </div>
+              </div>
+              <div class="hub-card-label">
+                <span class="hub-card-title">Game khác</span>
+                <span class="hub-card-sub">Sắp ra mắt</span>
+              </div>
+              <div class="hub-card-loader" aria-hidden="true"><span class="hub-spinner"></span></div>
+            </div>
+          </button>
+        </main>
+
+        <!-- Fixed bottom navigation rail -->
+        <nav class="hub-bottom-rail" aria-label="Điều hướng nhanh">
+          <!-- Left 1: Thêm bạn -->
+          <button id="hub-nav-friends" type="button" class="hub-nav-btn" aria-label="Thêm bạn">
+            <span class="hub-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            </span>
+            <span class="hub-nav-label">Thêm bạn</span>
+          </button>
+
+          <!-- Left 2: Nhận quà -->
+          <button id="hub-nav-gift" type="button" class="hub-nav-btn" aria-label="Nhận quà">
+            <span class="hub-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M20 6h-2.18c.07-.28.18-.54.18-.83a2.92 2.92 0 0 0-5.45-1.4l-.55.83-.55-.83A2.92 2.92 0 0 0 6 5.17c0 .29.11.55.18.83H4a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-7-1.83c.55 0 1 .45 1 1s-.45 1-1 1h-1l1-2zm-5 .17c0-.55.45-1 1-1h.17L8 7H7c-.55 0-1-.45-1-1zm-2 3h6v2H6V8zm2 10v-6h4v6H8zm6 0v-6h2v6h-2zm2-8h-6V8h6v2z"/></svg>
+            </span>
+            <span class="hub-nav-label">Nhận quà</span>
+            <span id="hub-gift-badge" class="hub-nav-badge" aria-label="phần thưởng" hidden>!</span>
+          </button>
+
+          <!-- Center: Giải đấu (larger) -->
+          <button id="hub-nav-tournament" type="button" class="hub-nav-btn hub-nav-btn--center" aria-label="Giải đấu">
+            <span class="hub-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>
+            </span>
+            <span class="hub-nav-label">Giải đấu</span>
+            <span id="hub-tournament-badge" class="hub-nav-badge hub-nav-badge--alert" aria-label="sự kiện" hidden></span>
+          </button>
+
+          <!-- Right 1: Cảnh báo -->
+          <button id="hub-nav-alert" type="button" class="hub-nav-btn" aria-label="Cảnh báo">
+            <span class="hub-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            </span>
+            <span class="hub-nav-label">Cảnh báo</span>
+            <span id="hub-alert-badge" class="hub-nav-badge hub-nav-badge--danger" aria-label="cảnh báo" hidden></span>
+          </button>
+
+          <!-- Right 2: Live Chat -->
+          <button id="hub-nav-chat" type="button" class="hub-nav-btn" aria-label="Live Chat">
+            <span class="hub-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+            </span>
+            <span class="hub-nav-label">Live Chat</span>
+            <span id="hub-chat-badge" class="hub-nav-badge" aria-label="tin nhắn chưa đọc" hidden></span>
+          </button>
+        </nav>
+      </section>
+      <!-- END HUB -->
 
       <!-- GIAO DIỆN SÒNG BẦU CUA CHÍNH (IN-GAME) -->
       <main id="game" class="game-arena" hidden>
@@ -179,20 +331,31 @@
           </div>
         </aside>
 
-        <!-- 3. CỘT PHẢI: LỊCH SỬ PHIÊN (GRID 20 KẾT QUẢ) -->
+        <!-- 3. CỘT PHẢI: 9 PHIÊN GẦN NHẤT, MỖI PHIÊN 3 LINH THÚ -->
         <aside class="right-sidebar" aria-label="Lịch sử phiên cược">
           <div class="sidebar-header">
             <div class="sh-title">LỊCH SỬ PHIÊN</div>
-            <div class="sh-badge" id="history-badge">100</div>
+            <div class="history-header-actions">
+              <div class="sh-badge" id="history-badge" title="Số phiên đang được lưu">0</div>
+              <button id="history-toggle" class="history-toggle-btn" type="button" aria-expanded="true"
+                aria-controls="history-panel" aria-label="Thu gọn bảng lịch sử">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <div class="history-grid-20" id="history-grid" role="group" aria-label="20 ván gần nhất">
-            <!-- Render động 20 kết quả dạng viên tròn xúc xắc (4 cột x 5 hàng) -->
+          <div class="history-panel" id="history-panel">
+            <div class="history-rounds" id="history-grid" role="list"
+              aria-label="9 phiên gần nhất, phiên mới nhất ở trên">
+              <!-- Mỗi hàng là một phiên gồm đúng 3 linh thú -->
+            </div>
+            <button id="stats-toggle-btn" class="stats-footer-btn" type="button">
+              <span><img class="stats-button-icon" src="/assets/arena/icon-statistics.png" alt="" aria-hidden="true" />
+                THỐNG KÊ</span>
+              <span class="arrow">›</span>
+            </button>
           </div>
-          <button id="stats-toggle-btn" class="stats-footer-btn" type="button">
-            <span><img class="stats-button-icon" src="/assets/arena/icon-statistics.png" alt="" aria-hidden="true" />
-              THỐNG KÊ</span>
-            <span class="arrow">›</span>
-          </button>
         </aside>
 
         <!-- 4. SÂN KHẤU TRUNG TÂM PHÍA TRÊN: ĐỒNG HỒ & TRẠNG THÁI -->
@@ -229,6 +392,7 @@
           <!-- Nút Chat bên trái -->
           <button id="chat-toggle" class="chat-btn" type="button" title="Trò chuyện nhanh" aria-label="Chat">
             <img src="/assets/arena/icon-chat.png" alt="" aria-hidden="true" />
+            <span id="chat-badge" class="chat-badge" hidden>0</span>
           </button>
 
           <!-- Khay Chip cược với mũi tên chuyển động -->
@@ -258,6 +422,128 @@
             </button>
           </div>
         </footer>
+
+        <!-- Bong bóng xem trước tin nhắn nhanh khi đóng khung chat -->
+        <div id="chat-toast-bubble" class="chat-toast-bubble" hidden></div>
+
+        <!-- Lớp hiển thị hiệu ứng biểu cảm bay nổi trên bàn cược -->
+        <div id="chat-reactions-overlay" class="chat-reactions-overlay" aria-hidden="true"></div>
+
+        <!-- KHUNG CHAT & BIỂU CẢM TƯƠNG TÁC HOÀNG GIA -->
+        <aside id="chat-drawer" class="chat-drawer" aria-label="Khung trò chuyện và biểu cảm" hidden>
+          <div class="chat-drawer-header">
+            <div class="chat-header-title">
+              <span class="chat-header-icon" aria-hidden="true">💬</span>
+              <span class="gold-title">TRÒ CHUYỆN PHÒNG</span>
+            </div>
+            <button id="close-chat" type="button" class="btn-chat-close" aria-label="Đóng khung chat">×</button>
+          </div>
+
+          <!-- Danh sách tin nhắn cuộc trò chuyện -->
+          <div id="chat-messages" class="chat-messages-container" role="log" aria-live="polite">
+            <div class="chat-system-msg">
+              <span>✶ Chào mừng đến Bầu Cua Arena! Hãy cùng trò chuyện và chia sẻ biểu cảm may mắn nhé.</span>
+            </div>
+          </div>
+
+          <!-- Thanh Biểu Cảm Nhanh & Câu Thoại (1 chạm gửi ngay) -->
+          <div class="chat-quick-reactions">
+            <div class="quick-emotes-scroll" role="toolbar" aria-label="Biểu cảm nhanh">
+              <button type="button" class="quick-emote-item" data-emote="😂" title="Cười lớn">😂</button>
+              <button type="button" class="quick-emote-item" data-emote="😭" title="Khóc ròng">😭</button>
+              <button type="button" class="quick-emote-item" data-emote="🔥" title="Bốc lửa">🔥</button>
+              <button type="button" class="quick-emote-item" data-emote="🤑" title="Phát tài">🤑</button>
+              <button type="button" class="quick-emote-item" data-emote="👑" title="Đỉnh chóp">👑</button>
+              <button type="button" class="quick-emote-item" data-emote="🥳" title="Ăn mừng">🥳</button>
+              <button type="button" class="quick-emote-item" data-emote="🦀" title="Cua">🦀</button>
+              <button type="button" class="quick-emote-item" data-emote="🊲" title="Xúc xắc">🊲</button>
+            </div>
+            <div class="quick-phrases-scroll" role="toolbar" aria-label="Câu thoại nhanh">
+              <button type="button" class="quick-phrase-item" data-phrase="Tất tay Bầu! 🎃">Tất tay Bầu! 🎃</button>
+              <button type="button" class="quick-phrase-item" data-phrase="Cầu Gà đang đỏ! 🐔">Cầu Gà đang đỏ! 🐔</button>
+              <button type="button" class="quick-phrase-item" data-phrase="Về Cua chắc luôn! 🦀">Về Cua chắc luôn! 🦀</button>
+              <button type="button" class="quick-phrase-item" data-phrase="Cay thế nhờ 😂">Cay thế nhờ 😂</button>
+              <button type="button" class="quick-phrase-item" data-phrase="Xin 500k xu host ơi! 🪙">Xin 500k xu host ơi! 🪙</button>
+              <button type="button" class="quick-phrase-item" data-phrase="Lắc đều tay lên nào! 🊲">Lắc đều tay lên nào! 🊲</button>
+              <button type="button" class="quick-phrase-item" data-phrase="Uy tín luôn anh em! ✨">Uy tín luôn anh em! ✨</button>
+            </div>
+          </div>
+
+          <!-- Bảng chọn Emotion mở rộng (3 tab: Mặt cười, Linh vật Bầu Cua, Cổ vũ) -->
+          <div id="chat-emoji-panel" class="chat-emoji-panel" hidden>
+            <div class="emoji-tabs-bar">
+              <button type="button" class="emoji-tab-nav active" data-tab="faces">Mặt cười</button>
+              <button type="button" class="emoji-tab-nav" data-tab="symbols">Bầu Cua</button>
+              <button type="button" class="emoji-tab-nav" data-tab="gestures">Cổ vũ</button>
+            </div>
+            <div class="emoji-panes-wrapper">
+              <div id="emoji-pane-faces" class="emoji-pane active">
+                <span class="emoji-pick-btn" role="button" tabindex="0">😂</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤣</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">😆</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🥳</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">😎</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤑</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">😭</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">😡</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">😱</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤯</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤔</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤩</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🥺</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">😴</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤫</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤪</span>
+              </div>
+              <div id="emoji-pane-symbols" class="emoji-pane" hidden>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🦌</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🎃</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🐔</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🐟</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🦀</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🦐</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🊲</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🪙</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">💰</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🧧</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🏆</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">👑</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🔥</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🍀</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">✨</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">💥</span>
+              </div>
+              <div id="emoji-pane-gestures" class="emoji-pane" hidden>
+                <span class="emoji-pick-btn" role="button" tabindex="0">👍</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">👏</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🤝</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">✌️</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🙌</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🙏</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🥂</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🎉</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">❤️</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">💯</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">💪</span>
+                <span class="emoji-pick-btn" role="button" tabindex="0">🫱</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thanh nhập & gửi tin nhắn -->
+          <form id="chat-form" class="chat-form-bottom">
+            <button id="chat-emoji-toggle" type="button" class="btn-emoji-toggle" title="Biểu cảm" aria-label="Mở bảng biểu cảm">
+              <span aria-hidden="true">😊</span>
+            </button>
+            <input id="chat-input" name="chatText" type="text" placeholder="Gõ tin nhắn..." maxlength="100" autocomplete="off" />
+            <button id="chat-send-btn" type="submit" class="btn-chat-send" title="Gửi" aria-label="Gửi tin nhắn">
+              <span>Gửi</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+            </button>
+          </form>
+        </aside>
 
         <!-- THÔNG BÁO TRẠNG THÁI NỔI TRONG PHÒNG -->
         <p id="room-notice" class="floating-room-notice" role="status" aria-live="polite" hidden>Đang đồng bộ bàn chơi…
@@ -340,16 +626,16 @@
     </div>
   </dialog>
 
-  <!-- MODAL: THỐNG KÊ TỶ LỆ XUẤT HIỆN -->
+  <!-- MODAL: THỐNG KÊ SỐ LẦN XUẤT HIỆN -->
   <dialog id="stats-dialog" class="custom-modal" aria-labelledby="stats-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="stats-title" class="gold-title">THỐNG KÊ LỊCH SỬ</h3>
+        <h3 id="stats-title" class="gold-title">SỐ LẦN LINH THÚ XUẤT HIỆN</h3>
         <button id="close-stats" type="button" class="btn-modal-close" aria-label="Đóng">×</button>
       </div>
       <div class="stats-modal-body">
         <div class="stats-symbols-grid" id="stats-symbols-bars">
-          <!-- Render tỷ lệ phần trăm về của 6 linh vật -->
+          <!-- Render số lần xuất hiện thực tế của 6 linh thú -->
         </div>
         <div class="user-stats-summary">
           <div><span>Ván đã chơi:</span> <strong id="stat-games">0</strong></div>
@@ -449,6 +735,315 @@
 
   <audio id="background-music" src="/assets/audio/tet-background.mp3" preload="metadata" loop hidden
     aria-hidden="true"></audio>
+
+  <!-- HUB MODALS -->
+
+  <!-- Modal: Chơi với bạn -->
+  <dialog id="hub-friend-dialog" class="hub-modal" aria-labelledby="hub-friend-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-friend-title" class="hub-modal-title">Chơi Với Bạn</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-friend-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div class="hub-friend-form">
+          <div class="hub-form-group">
+            <label for="hub-friend-name">Tên của bạn</label>
+            <input id="hub-friend-name" type="text" placeholder="Ví dụ: Thịnh Tu" minlength="2" maxlength="24" autocomplete="nickname" />
+          </div>
+          <button id="hub-create-room-btn" type="button" class="hub-btn-primary">Tạo Phòng Mới</button>
+          <div class="hub-divider"><span>HOẶC VÀO PHÒNG BẠN BÈ</span></div>
+          <div class="hub-join-row">
+            <input id="hub-room-code-input" type="text" placeholder="Mã phòng (VD: ABC123)" maxlength="6" pattern="[A-Za-z0-9]{6}" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+            <button id="hub-join-room-btn" type="button" class="hub-btn-secondary">Vào Phòng</button>
+          </div>
+          <p id="hub-friend-status" class="hub-form-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Chọn bàn -->
+  <dialog id="hub-table-dialog" class="hub-modal" aria-labelledby="hub-table-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-table-title" class="hub-modal-title">Chọn Bàn Chơi</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-table-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div id="hub-table-list" class="hub-table-list" role="list" aria-label="Danh sách phòng">
+          <!-- Rendered by JS -->
+        </div>
+        <p id="hub-table-empty" class="hub-table-empty" role="status">Đang tìm phòng…</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Thêm bạn -->
+  <dialog id="hub-addfriend-dialog" class="hub-modal" aria-labelledby="hub-addfriend-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-addfriend-title" class="hub-modal-title">Thêm Bạn</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-addfriend-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div class="hub-coming-soon-panel">
+          <svg class="hub-coming-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          <p>Tính năng kết bạn đang được phát triển.</p>
+          <p class="hub-coming-sub">Sắp ra mắt trong phiên bản tiếp theo!</p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Nhận quà (rewarded ad) -->
+  <dialog id="hub-gift-dialog" class="hub-modal" aria-labelledby="hub-gift-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-gift-title" class="hub-modal-title">Nhận Quà Miễn Phí</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-gift-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div id="hub-gift-content" class="hub-gift-content">
+          <!-- State: idle -->
+          <div data-gift-state="idle" class="hub-gift-state">
+            <div class="hub-gift-icon-wrap">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="hub-gift-big-icon"><path d="M20 6h-2.18c.07-.28.18-.54.18-.83a2.92 2.92 0 0 0-5.45-1.4l-.55.83-.55-.83A2.92 2.92 0 0 0 6 5.17c0 .29.11.55.18.83H4a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/></svg>
+            </div>
+            <p class="hub-gift-desc">Xem quảng cáo ngắn để nhận <strong>50.000 xu</strong> miễn phí!</p>
+            <p class="hub-gift-note">Phần thưởng sẽ được cấp sau khi xem xong toàn bộ quảng cáo.</p>
+            <button id="hub-watch-ad-btn" type="button" class="hub-btn-primary hub-btn-gift" aria-label="Xem quảng cáo để nhận 50.000 xu">Xem Quảng Cáo</button>
+            <p id="hub-gift-cooldown" class="hub-gift-cooldown" aria-live="polite" hidden></p>
+          </div>
+          <!-- State: loading_ad -->
+          <div data-gift-state="loading_ad" class="hub-gift-state" hidden>
+            <div class="hub-gift-icon-wrap"><span class="hub-spinner hub-spinner--large"></span></div>
+            <p>Đang tải quảng cáo…</p>
+          </div>
+          <!-- State: playing_ad (mock dev only) -->
+          <div data-gift-state="playing_ad" class="hub-gift-state" hidden>
+            <div class="hub-ad-placeholder">
+              <p><svg class="hub-inline-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2Zm0 14H3V5h18v12Z"/></svg> Quảng cáo đang phát</p>
+              <p class="hub-gift-note">Xem hết quảng cáo để nhận thưởng. Không được bỏ qua.</p>
+              <div class="hub-ad-progress"><div id="hub-ad-progress-bar" class="hub-ad-progress-bar"></div></div>
+              <p id="hub-ad-timer" class="hub-ad-timer" aria-live="polite">15</p>
+              <button id="hub-ad-cancel-btn" type="button" class="hub-btn-secondary">Bỏ qua (sẽ mất thưởng)</button>
+            </div>
+          </div>
+          <!-- State: completed -->
+          <div data-gift-state="completed" class="hub-gift-state" hidden>
+            <div class="hub-gift-icon-wrap"><svg viewBox="0 0 24 24" aria-hidden="true" class="hub-gift-big-icon"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+            <p>Xem xong! Đang cấp thưởng…</p>
+          </div>
+          <!-- State: success -->
+          <div data-gift-state="success" class="hub-gift-state" hidden>
+            <div class="hub-gift-icon-wrap"><svg viewBox="0 0 24 24" aria-hidden="true" class="hub-gift-big-icon"><path d="M12 2 9.8 8.3 3 9l5.1 4.5L6.6 20 12 16.6 17.4 20l-1.5-6.5L21 9l-6.8-.7z"/></svg></div>
+            <p class="hub-gift-success">Đã nhận <strong id="hub-reward-amount">50.000</strong> xu!</p>
+            <p id="hub-next-reward-info" class="hub-gift-note"></p>
+          </div>
+          <!-- State: error / cancelled -->
+          <div data-gift-state="error" class="hub-gift-state" hidden>
+            <div class="hub-gift-icon-wrap"><svg viewBox="0 0 24 24" aria-hidden="true" class="hub-gift-big-icon"><path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg></div>
+            <p id="hub-gift-error-msg">Đã xảy ra lỗi. Vui lòng thử lại.</p>
+            <button id="hub-gift-retry-btn" type="button" class="hub-btn-secondary">Thử lại</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Giải đấu -->
+  <dialog id="hub-tournament-dialog" class="hub-modal" aria-labelledby="hub-tournament-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-tournament-title" class="hub-modal-title">Giải Đấu</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-tournament-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div class="hub-coming-soon-panel">
+          <svg class="hub-coming-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>
+          <p>Giải đấu tuần này sắp bắt đầu.</p>
+          <p class="hub-coming-sub">Theo dõi để không bỏ lỡ!</p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Cảnh báo -->
+  <dialog id="hub-alert-dialog" class="hub-modal" aria-labelledby="hub-alert-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-alert-title" class="hub-modal-title">Cảnh Báo</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-alert-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div class="hub-coming-soon-panel">
+          <svg class="hub-coming-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <p>Không có cảnh báo nào hiện tại.</p>
+          <p class="hub-coming-sub">Hệ thống hoạt động bình thường.</p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Live Chat -->
+  <dialog id="hub-livechat-dialog" class="hub-modal" aria-labelledby="hub-livechat-title">
+    <div class="hub-modal-card hub-modal-card--wide">
+      <div class="hub-modal-header">
+        <h2 id="hub-livechat-title" class="hub-modal-title">Live Chat</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-livechat-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div class="hub-chat-area" id="hub-chat-messages" role="log" aria-live="polite" aria-label="Tin nhắn chat">
+          <div class="hub-chat-msg hub-chat-msg--system">Chào mừng đến với Live Chat!</div>
+        </div>
+        <form id="hub-chat-form" class="hub-chat-form" autocomplete="off">
+          <input id="hub-chat-input" type="text" placeholder="Nhắn tin…" maxlength="200" aria-label="Nhập tin nhắn" />
+          <button type="submit" class="hub-btn-primary" aria-label="Gửi">Gửi</button>
+        </form>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Game khác -->
+  <dialog id="hub-othergames-dialog" class="hub-modal" aria-labelledby="hub-othergames-title">
+    <div class="hub-modal-card">
+      <div class="hub-modal-header">
+        <h2 id="hub-othergames-title" class="hub-modal-title">Game Khác</h2>
+        <button type="button" class="hub-modal-close" aria-label="Đóng" data-close-modal="hub-othergames-dialog">×</button>
+      </div>
+      <div class="hub-modal-body">
+        <div class="hub-coming-soon-panel hub-coming-soon-panel--phoenix">
+          <div class="hub-phoenix-mini" aria-hidden="true"></div>
+          <p class="hub-coming-headline">Sắp Ra Mắt</p>
+          <p>Chúng tôi đang phát triển thêm nhiều trò chơi lễ hội hấp dẫn.</p>
+          <p class="hub-coming-sub">Hãy quay lại sớm để khám phá!</p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal: Xác thực tài khoản (Auth Modal) -->
+  <dialog id="auth-dialog" class="auth-dialog" aria-modal="true" aria-labelledby="auth-title-text">
+    <div class="auth-panel">
+      <!-- Header with metallic gold title plaque and close button -->
+      <header class="auth-header">
+        <div class="auth-title-plaque">
+          <img src="/assets/arena/logo1.png" alt="" class="auth-logo-mark" width="36" height="36" aria-hidden="true" />
+          <h2 id="auth-title-text" class="auth-title-text">ĐĂNG NHẬP</h2>
+        </div>
+        <div class="auth-close-wrap">
+          <button id="auth-close-btn" type="button" class="auth-close" aria-label="Đóng hộp thoại">✕</button>
+        </div>
+      </header>
+
+      <!-- Tabs (Đăng ký / Đăng nhập) -->
+      <nav id="auth-tabs" class="auth-tabs" role="tablist" aria-label="Lựa chọn xác thực">
+        <button id="auth-tab-register" type="button" class="auth-tab" role="tab" aria-selected="false" aria-controls="auth-view-register">Đăng Ký</button>
+        <button id="auth-tab-login" type="button" class="auth-tab" role="tab" aria-selected="true" aria-controls="auth-view-login">Đăng Nhập</button>
+      </nav>
+
+      <!-- Body containing the 3 state views -->
+      <div class="auth-body">
+        <!-- 1. ĐĂNG KÝ -->
+        <div id="auth-view-register" class="auth-view" role="tabpanel" aria-labelledby="auth-tab-register" aria-hidden="true">
+          <form id="auth-form-register" autocomplete="off" novalidate>
+            <div class="auth-field">
+              <label for="auth-reg-username">Tên đăng nhập <span class="auth-required" aria-hidden="true">*</span></label>
+              <input id="auth-reg-username" name="reg-username" type="text" autocomplete="username" placeholder="3–24 ký tự chữ, số hoặc gạch dưới" required />
+              <span id="err-auth-reg-username" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <div class="auth-field">
+              <label for="auth-reg-password">Mật khẩu <span class="auth-required" aria-hidden="true">*</span></label>
+              <div class="auth-pw-wrap">
+                <input id="auth-reg-password" name="reg-password" type="password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự" required />
+                <button type="button" class="auth-pw-toggle" data-target="auth-reg-password" aria-label="Hiện mật khẩu">👁️</button>
+              </div>
+              <span id="err-auth-reg-password" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <div class="auth-field">
+              <label for="auth-reg-confirm">Xác nhận mật khẩu <span class="auth-required" aria-hidden="true">*</span></label>
+              <div class="auth-pw-wrap">
+                <input id="auth-reg-confirm" name="reg-confirm" type="password" autocomplete="new-password" placeholder="Nhập lại chính xác mật khẩu" required />
+                <button type="button" class="auth-pw-toggle" data-target="auth-reg-confirm" aria-label="Hiện mật khẩu">👁️</button>
+              </div>
+              <span id="err-auth-reg-confirm" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <div class="auth-field">
+              <label for="auth-reg-displayname">Tên hiển thị <span class="auth-required" aria-hidden="true">*</span></label>
+              <input id="auth-reg-displayname" name="reg-displayname" type="text" autocomplete="nickname" placeholder="Tên xuất hiện trong ván chơi" required />
+              <span id="err-auth-reg-displayname" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <button id="auth-btn-register-submit" type="submit" class="auth-btn-register">ĐĂNG KÝ</button>
+            <div id="auth-status-register" class="auth-status" role="status" aria-live="polite"></div>
+          </form>
+        </div>
+
+        <!-- 2. ĐĂNG NHẬP -->
+        <div id="auth-view-login" class="auth-view auth-view--active" role="tabpanel" aria-labelledby="auth-tab-login" aria-hidden="false">
+          <form id="auth-form-login" autocomplete="off" novalidate>
+            <div class="auth-field">
+              <label for="auth-login-username">Tên đăng nhập <span class="auth-required" aria-hidden="true">*</span></label>
+              <input id="auth-login-username" name="login-username" type="text" autocomplete="username" placeholder="Nhập tên tài khoản" required />
+              <span id="err-auth-login-username" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <div class="auth-field">
+              <label for="auth-login-password">Mật khẩu <span class="auth-required" aria-hidden="true">*</span></label>
+              <div class="auth-pw-wrap">
+                <input id="auth-login-password" name="login-password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" required />
+                <button type="button" class="auth-pw-toggle" data-target="auth-login-password" aria-label="Hiện mật khẩu">👁️</button>
+              </div>
+              <span id="err-auth-login-password" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <div class="auth-login-actions">
+              <button id="auth-link-forgot" type="button" class="auth-link">Quên mật khẩu?</button>
+              <button id="auth-btn-login-submit" type="submit" class="auth-btn-login">ĐĂNG NHẬP</button>
+            </div>
+
+            <div id="auth-status-login" class="auth-status" role="status" aria-live="polite"></div>
+
+            <div class="auth-divider"><span>HOẶC</span></div>
+
+            <div class="auth-demo-notice">
+              Chưa có tài khoản? Bạn có thể <strong>chơi thử ngay</strong> với trải nghiệm đầy đủ!
+            </div>
+            <button id="auth-btn-demo-play" type="button" class="auth-btn-demo">CHƠI THỬ NGAY</button>
+          </form>
+        </div>
+
+        <!-- 3. QUÊN MẬT KHẨU -->
+        <div id="auth-view-forgot" class="auth-view" role="tabpanel" aria-label="Khôi phục mật khẩu" aria-hidden="true">
+          <form id="auth-form-forgot" autocomplete="off" novalidate>
+            <div class="auth-field">
+              <label for="auth-forgot-username">Tên đăng nhập <span class="auth-required" aria-hidden="true">*</span></label>
+              <input id="auth-forgot-username" name="forgot-username" type="text" autocomplete="username" placeholder="Nhập tên đăng nhập cần lấy lại" required />
+              <span id="err-auth-forgot-username" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <div class="auth-field">
+              <label for="auth-forgot-email">Email đã đăng ký <span class="auth-required" aria-hidden="true">*</span></label>
+              <input id="auth-forgot-email" name="forgot-email" type="email" autocomplete="email" placeholder="Địa chỉ email đã liên kết" required />
+              <span id="err-auth-forgot-email" class="auth-field-error" role="alert"></span>
+            </div>
+
+            <button id="auth-btn-forgot-ok" type="submit" class="auth-btn-ok">OK</button>
+            <div id="auth-status-forgot" class="auth-status" role="status" aria-live="polite"></div>
+
+            <div class="auth-back-row">
+              <button id="auth-link-back-login" type="button" class="auth-link">← Quay lại Đăng nhập</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 

@@ -135,3 +135,49 @@ test('kicking a bettor revokes access without deleting the accepted stake before
   assert.equal(room.players.has(guest.session.playerId), false);
   assert.equal(room.history[0].results.find(result => result.playerId === guest.session.playerId).totalReturn, 400);
 });
+
+test('chat and emotions broadcast messages, enforce rate limit, and maintain history', async t => {
+  const chatMessages = [];
+  const game = gameFor(t, {
+    onChatMessage: (socketId, msg) => chatMessages.push({ socketId, msg }),
+  });
+  const host = await ok(game, 'host', 'room:create', { name: 'Chủ phòng' });
+  const guest = await ok(game, 'guest', 'room:join', { name: 'Bạn chơi', code: host.state.code });
+
+  // Host sends text message
+  const chat1 = await ok(game, 'host', 'chat:send', { text: 'Chào mừng anh em vào phòng!' });
+  assert.equal(chat1.message.text, 'Chào mừng anh em vào phòng!');
+  assert.equal(chat1.message.senderName, 'Chủ phòng');
+  assert.equal(chat1.message.isHost, true);
+  assert.equal(chat1.message.type, 'text');
+
+  // Both sockets received the chat
+  assert.equal(chatMessages.length, 2);
+  assert.equal(chatMessages[0].msg.text, 'Chào mừng anh em vào phòng!');
+
+  // Guest sends an emotion
+  await delay(260); // Respect 250ms rate limit
+  const chat2 = await ok(game, 'guest', 'chat:send', { emotion: '🦀' });
+  assert.equal(chat2.message.emotion, '🦀');
+  assert.equal(chat2.message.type, 'emotion');
+  assert.equal(chat2.message.senderName, 'Bạn chơi');
+  assert.equal(chat2.message.isHost, false);
+
+  // Rate limit check: rapid send fails
+  const rapid = await game.handle('guest', 'chat:send', { text: 'Spam tin nhắn' });
+  assert.equal(rapid.ok, false);
+  assert.equal(rapid.error.code, 'CHAT_RATE_LIMIT');
+
+  // Empty chat fails
+  await delay(260);
+  const empty = await game.handle('guest', 'chat:send', { text: '   ' });
+  assert.equal(empty.ok, false);
+  assert.equal(empty.error.code, 'INVALID_CHAT');
+
+  // Room snapshot retains history
+  const sync = await ok(game, 'host', 'room:sync');
+  assert.equal(sync.state.messages.length, 2);
+  assert.equal(sync.state.messages[0].text, 'Chào mừng anh em vào phòng!');
+  assert.equal(sync.state.messages[1].emotion, '🦀');
+});
+
