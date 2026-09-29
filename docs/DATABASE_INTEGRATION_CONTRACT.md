@@ -1,12 +1,30 @@
 # Database Integration Contract
 
-This document defines the integration points between part the PostgreSQL and data-query layer—and part the database integration layer for the game. It serves as a working contract that allows both parts to be developed in parallel. File names and function names may change when sql is implemented, but the inputs, outputs, and transaction boundaries must be agreed upon before connecting them to `GameService`.
+This document defines the integration points between the **PostgreSQL Data Layer Task** and the **Game Persistence Integration Task**. It serves as a working contract that allows both tasks to be developed in parallel.
+
+File names and function names may change during implementation, but the inputs, outputs, error codes, and transaction boundaries must be agreed upon before connecting the data layer to `GameService`.
 
 ## Responsibility Scope
 
-Part Sql owns migrations, the database schema, connection pool, SQL queries, transactions, and database tests. Part back-end, Socket.IO is responsible for retrieving authenticated identities, calling data-layer functions from Socket.IO and `GameService`, updating RAM only after a transaction has been committed, broadcasting `room:state` and writing integration tests.
+The **PostgreSQL Data Layer Task** owns:
 
-Part back-end, Socket.IO must not write SQL directly inside `server/game.js`. Part SQL must not move game rules or payout calculations into repositories.
+- Database migrations and schema.
+- PostgreSQL connection pool.
+- SQL queries and repositories.
+- Transaction management.
+- Database integration tests.
+
+The **Game Persistence Integration Task** owns:
+
+- Retrieving authenticated user identities.
+- Calling data-layer functions from Socket.IO and `GameService`.
+- Updating the in-memory state only after the database transaction has been committed.
+- Broadcasting `room:state`.
+- Writing game–database integration tests.
+
+The Game Persistence Integration Task must not write SQL directly inside `server/game.js`.
+
+The PostgreSQL Data Layer Task must not move game rules or payout calculations into repositories.
 
 ## Identity Contract Required from the Login Module
 
@@ -51,9 +69,11 @@ getPlayerHistory({
 getPlayerStatistics(userId)
 ```
 
-Phần A cần cung cấp tên module, tên export, cấu trúc input, cấu trúc dữ liệu trả về và danh sách lỗi cho từng hàm. Các hàm thay đổi balance phải tự quản lý transaction; Phần B không tự mở transaction quanh nhiều repository call rời rạc.
+The PostgreSQL Data Layer Task must provide the module name, exported function name, input structure, return-data structure, and error codes for each function.
 
-## Kết quả tối thiểu của wallet
+Functions that modify balances must manage their own transactions. The Game Persistence Integration Task must not open a transaction around multiple independent repository calls.
+
+## Minimum Wallet Result
 
 ```js
 {
@@ -63,11 +83,15 @@ Phần A cần cung cấp tên module, tên export, cấu trúc input, cấu tr�
 }
 ```
 
-Balance từ database là giá trị chính thức. Balance trong room chỉ là bản sao dùng để phát snapshot sau khi database commit thành công.
+The balance stored in the database is the authoritative value.
 
-## Transaction đặt cược
+The balance stored in a room is only an in-memory copy used for broadcasting snapshots after the database transaction has been committed successfully.
 
-`placeBet` phải kiểm tra balance, trừ tiền và lưu bet trong cùng một transaction. Khi thành công, hàm trả về bet đã chấp nhận và balance mới.
+## Bet Transaction
+
+`placeBet` must validate the balance, deduct the stake, and save the bet within the same transaction.
+
+After the transaction succeeds, the function must return the accepted bets and the updated balance.
 
 ```js
 {
@@ -77,11 +101,15 @@ Balance từ database là giá trị chính thức. Balance trong room chỉ là
 }
 ```
 
-Phần B chỉ cập nhật state trong RAM và gửi acknowledgment sau khi transaction commit. Nếu transaction thất bại, state trong RAM phải giữ nguyên.
+The Game Persistence Integration Task must update the in-memory state and send the acknowledgment only after the transaction has been committed.
 
-## Transaction settlement
+If the transaction fails, the in-memory state must remain unchanged.
 
-`settleRound` phải lưu kết quả round, kết quả từng người chơi và payout trong cùng một transaction. Database cần ngăn cùng một player nhận payout hai lần cho cùng round.
+## Settlement Transaction
+
+`settleRound` must save the round result, each player’s result, and all payouts within the same transaction.
+
+The database must prevent the same player from receiving a payout more than once for the same round.
 
 ```js
 {
@@ -99,7 +127,7 @@ Phần B chỉ cập nhật state trong RAM và gửi acknowledgment sau khi tra
 }
 ```
 
-## Error codes dự kiến
+## Proposed Error Codes
 
 - `WALLET_NOT_FOUND`
 - `INSUFFICIENT_BALANCE`
@@ -108,99 +136,125 @@ Phần B chỉ cập nhật state trong RAM và gửi acknowledgment sau khi tra
 - `ROUND_ALREADY_SETTLED`
 - `DATABASE_UNAVAILABLE`
 
-Phần B chuyển các lỗi nghiệp vụ này thành Socket.IO acknowledgment. Lỗi không xác định dùng `INTERNAL_ERROR` và không gửi chi tiết SQL hoặc stack trace cho client.
+The Game Persistence Integration Task converts these business errors into Socket.IO acknowledgments.
 
-## Quy tắc thứ tự xử lý
+Unknown errors must use `INTERNAL_ERROR`. SQL details and stack traces must never be sent to the client.
+
+## Processing Order
 
 ```text
-Nhận Socket.IO command
-  -> xác thực userId và quyền
-  -> validate payload và trạng thái round
-  -> gọi database transaction
-  -> cập nhật bản sao RAM
-  -> phát room state
-  -> gửi acknowledgment
+Receive a Socket.IO command
+  → authenticate userId and permissions
+  → validate the payload and round state
+  → execute the database transaction
+  → update the in-memory copy
+  → broadcast the room state
+  → send the acknowledgment
 ```
 
-Socket.IO handler phải chấp nhận `GameService.handle()` trả về Promise. Điều này cho phép thêm database I/O sau mà không thay đổi protocol acknowledgment của client.
+The Socket.IO handler must support `GameService.handle()` returning a `Promise`.
 
-## Bàn giao theo từng mốc
+This allows database I/O to be added without changing the client acknowledgment protocol.
 
-1. Phần A gửi contract `users.id`, schema draft và interface dự kiến.
-2. Phần B dùng mock theo interface để chuẩn bị integration point và tests.
-3. Phần A gửi migration, connection pool và các hàm đọc profile hoặc wallet.
-4. Phần B nối create hoặc join room với account và wallet.
-5. Phần A gửi transaction đặt cược và settlement.
-6. Phần B nối bet, settlement và xử lý lỗi.
-7. Phần A gửi history, statistics, fixtures và database tests.
-8. Hai phần chạy integration test và restart test cùng nhau.
+## Milestone-Based Handover
 
-## Trạng thái triển khai Phần B
+1. The PostgreSQL Data Layer Task provides the `users.id` contract, schema draft, and proposed interfaces.
+2. The Game Persistence Integration Task uses mocks based on those interfaces to prepare integration points and tests.
+3. The PostgreSQL Data Layer Task provides migrations, the connection pool, and profile or wallet query functions.
+4. The Game Persistence Integration Task connects room creation and room joining to accounts and wallets.
+5. The PostgreSQL Data Layer Task provides bet-placement and settlement transactions.
+6. The Game Persistence Integration Task connects betting and settlement operations and implements error handling.
+7. The PostgreSQL Data Layer Task provides history queries, statistics queries, fixtures, and database tests.
+8. Both tasks run integration tests and restart-recovery tests together.
 
-Đã triển khai các điểm nối sau:
+## Game Persistence Integration Task — Implementation Status
 
-- `GameService.handle()` là async và chỉ cập nhật RAM sau khi persistence trả về thành công.
-- `createGameServer()` nhận `authenticateSocket(socket)` và chuyển identity tin cậy vào `GameService`.
-- Persistent resume tìm membership đang hoạt động bằng `socket.data.identity.userId`; token RAM chỉ còn dùng cho RAM mode.
-- `authorizeSocketCommand(socket, event, payload, identity)` cho phép module login kiểm tra lại session, logout hoặc ban ở từng lệnh sau khi socket đã kết nối.
-- Khi bật persistence, create/join lấy display name, avatar và balance từ account; client không được tự gửi `userId` hoặc balance.
-- `GamePersistenceService.placeBet()` ghi bet, trừ wallet, ghi ledger và processed command trong một transaction.
-- `GamePersistenceService.clearBets()` hoàn cược và ghi ledger trong một transaction.
-- `GamePersistenceService.settleRound()` khóa round/wallet, ghi payout, player result và final dice trong một transaction.
-- Các lệnh kinh tế/quản trị cũ của Host bị từ chối khi chạy persistent mode; kick và chuyển Host vẫn được giữ.
-- Kick thu hồi quyền phòng ngay nhưng giữ người có accepted bet trong settlement; membership chỉ đóng sau khi payout đã commit.
-- API đọc dữ liệu nhận `authenticateHttp(req)` và chỉ lấy userId từ identity server: `/api/me`, `/api/me/wallet`, `/api/me/wallet/transactions`, `/api/me/history`, `/api/me/stats`, room history và symbol statistics.
-- `tests/database-game-integration.test.js` kiểm tra auth bắt buộc, DB-before-RAM và rollback không broadcast.
+The following integration points have been implemented:
 
-Runtime chỉ bật persistent mode khi server được truyền đồng thời `persistence` và `authenticateSocket`. Phần login cần cung cấp adapter xác thực session trả về `{ userId, role }`; không thêm fallback tin `userId` từ client.
+- `GameService.handle()` is asynchronous and updates the in-memory state only after persistence operations succeed.
+- `createGameServer()` accepts `authenticateSocket(socket)` and passes the trusted identity to `GameService`.
+- Persistent resume finds active membership through `socket.data.identity.userId`. RAM tokens are used only in RAM mode.
+- `authorizeSocketCommand(socket, event, payload, identity)` allows the login module to revalidate the session, logout state, or ban status for every command after the socket has connected.
+- When persistence is enabled, room creation and joining retrieve the display name, avatar, and balance from the account. The client cannot provide a trusted `userId` or balance.
+- `GamePersistenceService.placeBet()` saves the bet, deducts the wallet balance, writes the ledger entry, and records the processed command within one transaction.
+- `GamePersistenceService.clearBets()` refunds bets and writes the corresponding ledger entries within one transaction.
+- `GamePersistenceService.settleRound()` locks the round and wallets, records payouts, saves player results, and stores the final dice within one transaction.
+- Legacy Host economy and administration commands are rejected in persistent mode. Kick and Host transfer operations remain available.
+- Kicking a player immediately revokes room access but preserves accepted bets for settlement. The membership is closed only after the payout transaction has been committed.
+- Data APIs use `authenticateHttp(req)` and obtain `userId` only from the server-side identity. These APIs include `/api/me`, `/api/me/wallet`, `/api/me/wallet/transactions`, `/api/me/history`, `/api/me/stats`, room history, and symbol statistics.
+- `tests/database-game-integration.test.js` verifies authentication requirements, database-before-RAM ordering, and that failed transactions do not broadcast state changes.
 
-Sau khi phần login bàn giao session verifier, entry point có thể dùng:
+Persistent mode is enabled only when the server receives both `persistence` and `authenticateSocket`.
+
+The login module must provide a session-authentication adapter that returns:
+
+```js
+{
+  userId,
+  role,
+}
+```
+
+There must be no fallback that trusts a `userId` supplied by the client.
+
+After the login module provides the session verifier, the entry point can use:
 
 ```js
 import { createPersistentGameServer } from '../server/persistent.js';
 
 const app = await createPersistentGameServer({
-  authenticateSocket: socket => loginService.authenticateSocket(socket),
+  authenticateSocket: socket =>
+    loginService.authenticateSocket(socket),
+
   authorizeSocketCommand: (socket, event, payload, identity) =>
-    loginService.authorizeSocketCommand(socket, event, payload, identity),
-  authenticateHttp: req => loginService.authenticateHttp(req),
+    loginService.authorizeSocketCommand(
+      socket,
+      event,
+      payload,
+      identity,
+    ),
+
+  authenticateHttp: req =>
+    loginService.authenticateHttp(req),
 });
 ```
 
-## Checklist khi Phần A bàn giao
+## PostgreSQL Data Layer Handover Checklist
 
-- Branch hoặc Pull Request và commit cần dùng.
-- Migration files và lệnh chạy migration.
-- `.env.example` chỉ chứa tên biến, không chứa mật khẩu thật.
-- Module export và chữ ký hàm.
-- Error codes và transaction guarantee.
-- Seed hoặc fixtures cho integration test.
-- Lệnh chạy database tests và kết quả hiện tại.
-- Các quyết định chưa chốt về wallet, round dở và refund.
+The PostgreSQL Data Layer Task must provide:
 
-## Phạm vi Phần B độc lập đã hoàn tất
+- The branch, Pull Request, and required commit.
+- Migration files and the command used to run migrations.
+- An `.env.example` containing variable names only, without real passwords.
+- Module exports and function signatures.
+- Error codes and transaction guarantees.
+- Seed data or fixtures for integration tests.
+- The command used to run database tests and the current test results.
+- Unresolved decisions concerning wallets, interrupted rounds, and refunds.
 
-Các hạng mục dưới đây không phụ thuộc giao diện hoặc cách module login phát hành session:
+## Independently Completed Game Persistence Integration Work
 
-- Database transaction hoàn tất trước khi cập nhật RAM, broadcast và acknowledgment.
-- Cược, xóa cược, settlement và khôi phục round dở đều có transaction boundary rõ ràng.
-- Retry cùng `requestId` không trừ tiền lần hai và trả về balance hiện tại thay vì balance cũ trong payload đã lưu.
-- Các thao tác async trong cùng một room được xử lý tuần tự; shake/settlement không chạy chồng lên một bet đang chờ database.
-- Hai yêu cầu settlement đồng thời chỉ cập nhật payout, statistics và room history một lần.
-- Trạng thái `bets.status` được ghi theo từng symbol thắng hoặc thua, không đánh dấu toàn bộ bet là thắng chỉ vì người chơi có payout.
-- Mock integration tests kiểm tra DB-before-RAM, rollback, recovery và concurrency.
-- Mock integration tests kiểm tra resume theo account, kick vẫn settlement, HTTP data API không nhận userId từ client và session socket có thể bị revoke giữa kết nối.
-- PostgreSQL integration test kiểm tra trọn luồng create room -> place bets -> idempotent retry -> settle -> history/statistics/ledger.
-- Quy tắc kick hiện tại thu hồi quyền truy cập ngay nhưng giữ mọi accepted bet tới settlement, sau đó mới đóng membership.
+The following items do not depend on the user interface or on how the login module issues sessions:
 
-## Hạng mục tạm hoãn vì phụ thuộc thành viên khác
+- Database transactions complete before RAM updates, broadcasts, and acknowledgments.
+- Bet placement, bet clearing, settlement, and interrupted-round recovery have clearly defined transaction boundaries.
+- Retrying the same `requestId` does not deduct money twice and returns the current balance instead of an outdated balance stored in the original response payload.
+- Asynchronous operations within the same room are processed sequentially. Shake and settlement operations cannot overlap with a bet that is still waiting for the database.
+- Two concurrent settlement requests update payouts, statistics, and room history only once.
+- The `bets.status` value is stored separately for each winning or losing symbol. All bets are not marked as won merely because the player received a payout.
+- Mock integration tests verify database-before-RAM ordering, rollback, recovery, and concurrency.
+- Mock integration tests verify account-based resume, settlement after kick, HTTP data APIs that reject client-supplied `userId` values, and socket sessions that can be revoked after connection.
+- PostgreSQL integration tests cover the complete flow: create room → place bets → idempotent retry → settle → history/statistics/ledger.
+- The current kick rule immediately revokes room access but preserves all accepted bets until settlement. Membership is closed afterward.
 
-- Bật persistent mode trong `server.js`: chờ module login cung cấp `authenticateSocket(socket)` và quy tắc logout/session expiry.
-- Cắm session verifier thật vào các seam `authenticateSocket`, `authorizeSocketCommand` và `authenticateHttp`; hiện repository chưa có module login backend.
-- Admin grant, rewarded ads, audit UI và các thao tác quản trị mở rộng.
-- Nhóm cần xác nhận quy tắc kick “giữ cược tới settlement” có đúng sản phẩm cuối cùng hay muốn hoàn cược khi còn ở pha betting.
+## Deferred Items That Depend on Other Team Members
 
-Trước khi bật persistent mode mặc định, cần chạy trên PostgreSQL test sạch:
+- Enabling persistent mode in `server.js`: waiting for the login module to provide `authenticateSocket(socket)` and the logout/session-expiration rules.
+- Connecting a real session verifier to `authenticateSocket`, `authorizeSocketCommand`, and `authenticateHttp`. The repository does not currently contain a backend login module.
+- Admin grants, rewarded advertisements, audit UI, and additional administration operations.
+- The team must confirm whether the current kick rule—preserving bets until settlement—is the intended final behavior or whether bets should be refunded when a player is kicked during the betting phase.
+
+Before enabling persistent mode by default, the following commands must be run against a clean PostgreSQL test database:
 
 ```bash
 npm run db:migrate
