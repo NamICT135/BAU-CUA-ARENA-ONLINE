@@ -1,26 +1,26 @@
-# Contract tích hợp database
+# Database Integration Contract
 
-Tài liệu này xác định điểm nối giữa Phần A, phần PostgreSQL và truy vấn dữ liệu, với Phần B, phần tích hợp database vào game. Đây là contract làm việc để hai phần có thể phát triển song song. Tên file hoặc tên hàm có thể đổi khi Phần A triển khai, nhưng input, output và transaction boundary cần được thống nhất trước khi nối vào `GameService`.
+This document defines the integration points between part the PostgreSQL and data-query layer—and part the database integration layer for the game. It serves as a working contract that allows both parts to be developed in parallel. File names and function names may change when sql is implemented, but the inputs, outputs, and transaction boundaries must be agreed upon before connecting them to `GameService`.
 
-## Phạm vi trách nhiệm
+## Responsibility Scope
 
-Phần A sở hữu migration, schema, connection pool, SQL, transaction và database tests. Phần B sở hữu việc lấy danh tính đã xác thực, gọi các hàm dữ liệu từ Socket.IO và `GameService`, cập nhật RAM sau khi transaction commit, phát `room:state` và viết integration tests.
+Part Sql owns migrations, the database schema, connection pool, SQL queries, transactions, and database tests. Part back-end, Socket.IO is responsible for retrieving authenticated identities, calling data-layer functions from Socket.IO and `GameService`, updating RAM only after a transaction has been committed, broadcasting `room:state` and writing integration tests.
 
-Phần B không viết SQL trực tiếp trong `server/game.js`. Phần A không chuyển game rule hoặc cách tính payout vào repository.
+Part back-end, Socket.IO must not write SQL directly inside `server/game.js`. Part SQL must not move game rules or payout calculations into repositories.
 
-## Contract danh tính cần nhận từ phần login
+## Identity Contract Required from the Login Module
 
-Trước khi tích hợp account, nhóm cần chốt:
+Before integrating user accounts, the team must agree on:
 
-- Kiểu dữ liệu của `users.id`.
-- HTTP lấy danh tính từ `req.user.id` hay một field tương đương.
-- Socket.IO lấy danh tính từ `socket.data.userId` hay một field tương đương.
-- Thời điểm tạo `player_profile` và `wallet` cho tài khoản mới.
-- Cách logout, ban hoặc session hết hạn làm mất quyền gửi lệnh qua socket.
+- The data type of `users.id`.
+- Whether HTTP retrieves the authenticated identity from `req.user.id` or an equivalent field.
+- Whether Socket.IO retrieves the authenticated identity from `socket.data.userId` or an equivalent field.
+- When `player_profile` and `wallet` records are created for a new account.
+- How logout, account bans, or expired sessions revoke permission to send commands through the socket.
 
-Client không được tự gửi `userId`, role hoặc balance để server tin trực tiếp.
+The server must never directly trust a `userId`, role, or balance supplied by the client.
 
-## Interface dữ liệu dự kiến
+## Proposed Data Interfaces
 
 ```js
 getOrCreateProfile(userId)
