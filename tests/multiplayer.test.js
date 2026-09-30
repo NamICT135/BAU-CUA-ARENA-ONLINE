@@ -52,6 +52,42 @@ async function waitUntil(predicate) {
   }
 }
 
+test('Socket.IO acknowledgments await asynchronous game handlers', async t => {
+  const { app, connect } = await setup(t);
+  const socket = await connect();
+  app.game.handle = async (socketId, event, payload) => {
+    await delay(10);
+    return { ok: true, socketId, event, payload };
+  };
+
+  const reply = await command(socket, 'room:sync', { probe: 'database-ready' });
+  assert.deepEqual(reply, {
+    ok: true,
+    socketId: socket.id,
+    event: 'room:sync',
+    payload: { probe: 'database-ready' },
+  });
+});
+
+test('Socket.IO returns a stable error when an asynchronous handler rejects', async t => {
+  const { app, connect } = await setup(t);
+  const socket = await connect();
+  const logged = [];
+  t.mock.method(console, 'error', (...args) => logged.push(args));
+  app.game.handle = async () => { throw new Error('simulated database failure'); };
+
+  const reply = await command(socket, 'room:sync');
+  assert.deepEqual(reply, {
+    ok: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'Có lỗi xảy ra. Vui lòng đồng bộ phòng rồi thử lại.',
+    },
+  });
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0][0], 'Socket command failed:');
+});
+
 test('20 connected players share one authoritative round; a 21st cannot join', { timeout: 15000 }, async t => {
   let draw = 0;
   const { connect } = await setup(t, { randomIntFn: () => draw++ % 6 });

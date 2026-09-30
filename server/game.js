@@ -7,6 +7,11 @@ const MUTATIONS = new Set(['round:open', 'bet:add', 'bet:clear', 'round:shake', 
 const BETTING_DURATION_SECONDS = new Set([15, 30, 45, 60]);
 const MAX_AMOUNT = 1_000_000_000;
 const MAX_BALANCE = 1_000_000_000_000;
+const PERSISTENCE_ERROR_CODES = new Set([
+  'ACCOUNT_DISABLED', 'AUTH_REQUIRED', 'BETTING_CLOSED', 'DATABASE_CONFLICT',
+  'DATABASE_UNAVAILABLE', 'DATABASE_VALUE_OUT_OF_RANGE', 'INSUFFICIENT_BALANCE',
+  'ROUND_ALREADY_SETTLED', 'ROUND_NOT_FOUND', 'WALLET_NOT_FOUND',
+]);
 
 class GameError extends Error {
   constructor(code, message) {
@@ -51,28 +56,64 @@ export class GameService {
     this.onState = options.onState ?? (() => {});
     this.onChatMessage = options.onChatMessage ?? (() => {});
     this.onReplace = options.onReplace ?? (() => {});
-    this.cleanupTimer = setInterval(() => this.cleanup(), options.cleanupIntervalMs ?? 30_000);
+    this.persistence = options.persistence ?? null;
+    this.roomOperations = new WeakMap();
+    this.cleanupTimer = setInterval(() => {
+      void this.cleanup().catch(error => console.error('Game cleanup failed:', error));
+    }, options.cleanupIntervalMs ?? 30_000);
     this.cleanupTimer.unref();
+  }
+
+  async withRoomOperation(room, operation) {
+    const previous = this.roomOperations.get(room) ?? Promise.resolve();
+    let release;
+    const turn = new Promise(resolve => { release = resolve; });
+    const tail = previous.then(() => turn);
+    this.roomOperations.set(room, tail);
+
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.roomOperations.get(room) === tail) this.roomOperations.delete(room);
+    }
   }
 
   emptyBets() {
     return Object.fromEntries(this.symbolIds.map(id => [id, 0]));
   }
 
-  emptyStats() {
+  emptyStats(highestBalance = this.config.initialBalance) {
     return {
       gamesPlayed: 0, wins: 0, losses: 0, breakEven: 0,
-      highestBalance: this.config.initialBalance, totalBet: 0, totalReturned: 0,
+      highestBalance, totalBet: 0, totalReturned: 0,
     };
   }
 
-  player(name, socketId) {
+  player(name, socketId, profile = null) {
+    const balance = profile?.balance ?? this.config.initialBalance;
     return {
       id: randomUUID(), token: randomBytes(32).toString('base64url'), name,
+      userId: profile?.userId ?? null,
+      role: profile?.role ?? 'player',
+      avatarKey: profile?.avatarKey ?? 'avatar_default',
       socketId, connected: true, disconnectedAt: null,
-      balance: this.config.initialBalance, bets: this.emptyBets(), eligible: false,
-      stats: this.emptyStats(), lastResult: null, requests: new Map(),
+      pendingRemoval: false,
+      balance, bets: this.emptyBets(), eligible: false,
+      stats: profile?.stats ? { ...profile.stats } : this.emptyStats(balance),
+      lastResult: null, requests: new Map(),
     };
+  }
+
+  async playerFor(name, socketId, identity) {
+    if (!this.persistence) return this.player(this.name(name), socketId);
+    requireCondition(typeof identity?.userId === 'string' && identity.userId.length > 0,
+      'AUTH_REQUIRED', 'Bạn cần đăng nhập trước khi tham gia phòng.');
+    const profile = await this.persistence.getPlayerProfile(identity.userId);
+    requireCondition(profile?.userId === identity.userId,
+      'AUTH_REQUIRED', 'Hồ sơ database không khớp với phiên đăng nhập.');
+    return this.player(this.name(profile.displayName), socketId, profile);
   }
 
   name(value) {
@@ -108,7 +149,7 @@ export class GameService {
       locked: room.locked, remainingMs: room.remainingMs,
       ...(player.id === room.hostId ? { admin: { forcedDice: room.forcedDice ? [...room.forcedDice] : null } } : {}),
       players: [...room.players.values()].map(entry => ({
-        id: entry.id, name: entry.name, balance: entry.balance, connected: entry.connected,
+        id: entry.id, name: entry.name, avatarKey: entry.avatarKey, balance: entry.balance, connected: entry.connected,
         betTotal: totalBets(entry.bets), eligible: entry.eligible,
       })),
       boardTotals, dice: room.phase === 'result' ? [...room.dice] : [],
@@ -118,7 +159,7 @@ export class GameService {
         return round;
       }),
       you: {
-        id: player.id, balance: player.balance, bets: { ...player.bets }, eligible: player.eligible,
+        id: player.id, avatarKey: player.avatarKey, balance: player.balance, bets: { ...player.bets }, eligible: player.eligible,
         stats: { ...player.stats }, lastResult: player.lastResult ? { ...player.lastResult } : null,
       },
     };
@@ -139,47 +180,56 @@ export class GameService {
     };
   }
 
-  handle(socketId, event, payload) {
+  async handle(socketId, event, payload, identity = null) {
     try {
       requireCondition(payload && typeof payload === 'object' && !Array.isArray(payload),
         'INVALID_PAYLOAD', 'Dữ liệu gửi lên không hợp lệ.');
-      if (event === 'room:create') return this.create(socketId, payload);
-      if (event === 'room:join') return this.join(socketId, payload);
-      if (event === 'room:resume') return this.resume(socketId, payload);
-      const { room, player } = this.member(socketId);
-      // Enforce the deadline even if the event loop has not run its timer yet.
-      if (!room.paused && room.deadline && Date.now() >= room.deadline) {
-        if (room.phase === 'betting') this.shake(room);
-        else if (room.phase === 'result') this.openRound(room);
-        this.changed(room);
-      }
-      if (event === 'room:sync') return this.success(room, player, true);
-      if (event === 'room:leave') return this.leave(room, player);
-      if (event === 'chat:send') return this.sendChat(room, player, payload);
-      requireCondition(MUTATIONS.has(event), 'UNKNOWN_COMMAND', 'Lệnh không được hỗ trợ.');
-      requireCondition(typeof payload.requestId === 'string' && payload.requestId.length > 0 && payload.requestId.length <= 100,
-        'INVALID_REQUEST', 'Mã yêu cầu không hợp lệ.');
+      if (event === 'room:create') return await this.create(socketId, payload, identity);
+      if (event === 'room:join') return await this.join(socketId, payload, identity);
+      if (event === 'room:resume') return await this.resume(socketId, payload, identity);
+      const { room } = this.member(socketId);
+      return await this.withRoomOperation(room, async () => {
+        const activeMembership = this.member(socketId);
+        requireCondition(activeMembership.room === room, 'SESSION_EXPIRED', 'Phiên đã hết hạn. Vui lòng vào phòng lại.');
+        const player = activeMembership.player;
 
-      const fingerprint = JSON.stringify([event, payload]);
-      const previous = player.requests.get(payload.requestId);
-      if (previous) {
-        requireCondition(previous.fingerprint === fingerprint, 'REQUEST_CONFLICT', 'Mã yêu cầu đã được sử dụng.');
+        // Enforce the deadline even if the event loop has not run its timer yet.
+        if (!room.paused && room.deadline && Date.now() >= room.deadline) {
+          if (room.phase === 'betting') this.shake(room);
+          else if (room.phase === 'result') await this.openRound(room);
+          this.changed(room);
+        }
+        if (event === 'room:sync') return this.success(room, player, true);
+        if (event === 'room:leave') return await this.leave(room, player);
+        if (event === 'chat:send') return this.sendChat(room, player, payload);
+        requireCondition(MUTATIONS.has(event), 'UNKNOWN_COMMAND', 'Lệnh không được hỗ trợ.');
+        requireCondition(typeof payload.requestId === 'string' && payload.requestId.length > 0 && payload.requestId.length <= 100,
+          'INVALID_REQUEST', 'Mã yêu cầu không hợp lệ.');
+
+        const fingerprint = JSON.stringify([event, payload]);
+        const previous = player.requests.get(payload.requestId);
+        if (previous) {
+          requireCondition(previous.fingerprint === fingerprint, 'REQUEST_CONFLICT', 'Mã yêu cầu đã được sử dụng.');
+          return this.success(room, player);
+        }
+        // Keep every accepted bet request in this round; eviction could replay a stake.
+        requireCondition(['room:reset', 'round:open', 'host:cancel'].includes(event) || player.requests.size < 1000,
+          'ROUND_ACTION_LIMIT', 'Bạn đã thao tác quá nhiều trong vòng này. Vui lòng chờ vòng tiếp theo.');
+        await this.mutate(room, player, event, payload);
+        player.requests.set(payload.requestId, { fingerprint });
+        this.changed(room);
         return this.success(room, player);
-      }
-      // Keep every accepted bet request in this round; eviction could replay a stake.
-      requireCondition(['room:reset', 'round:open', 'host:cancel'].includes(event) || player.requests.size < 1000,
-        'ROUND_ACTION_LIMIT', 'Bạn đã thao tác quá nhiều trong vòng này. Vui lòng chờ vòng tiếp theo.');
-      this.mutate(room, player, event, payload);
-      player.requests.set(payload.requestId, { fingerprint });
-      this.changed(room);
-      return this.success(room, player);
+      });
     } catch (error) {
-      if (!(error instanceof GameError)) console.error('Game command failed:', error);
+      const expectedPersistenceError = error?.name === 'PersistenceError' && PERSISTENCE_ERROR_CODES.has(error.code);
+      if (!(error instanceof GameError) && !expectedPersistenceError) console.error('Game command failed:', error);
       return {
         ok: false,
         error: {
-          code: error instanceof GameError ? error.code : 'INTERNAL_ERROR',
-          message: error instanceof GameError ? error.message : 'Có lỗi xảy ra. Vui lòng đồng bộ phòng rồi thử lại.',
+          code: error instanceof GameError || expectedPersistenceError ? error.code : 'INTERNAL_ERROR',
+          message: error instanceof GameError || expectedPersistenceError
+            ? error.message
+            : 'Có lỗi xảy ra. Vui lòng đồng bộ phòng rồi thử lại.',
         },
       };
     }
@@ -191,18 +241,19 @@ export class GameService {
     this.memberships.set(player.socketId, { code: room.code, playerId: player.id });
   }
 
-  create(socketId, payload) {
+  async create(socketId, payload, identity) {
     requireCondition(!this.memberships.has(socketId), 'ALREADY_IN_ROOM', 'Hãy rời phòng hiện tại trước.');
-    const name = this.name(payload.name);
-    this.cleanup();
+    await this.cleanup();
     requireCondition(this.rooms.size < this.maxRooms, 'SERVER_FULL', 'Máy chủ đang đầy. Vui lòng thử lại sau.');
     let code;
     do {
       code = Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[randomInt(32)]).join('');
     } while (this.rooms.has(code));
-    const player = this.player(name, socketId);
+    const player = await this.playerFor(payload.name, socketId, identity);
+    const persistenceId = randomUUID();
     const room = {
       code, gameId: randomUUID(), hostId: player.id, players: new Map(), phase: 'waiting',
+      persistenceId,
       roundNumber: 0, roundId: null, revision: 0, dice: [], history: [],
       messages: [],
       revealTimer: null, hostTimer: null, updatedAt: Date.now(),
@@ -210,64 +261,117 @@ export class GameService {
       bettingMs: this.bettingMs,
       forcedDice: null, demoRound: false,
     };
+    if (this.persistence) {
+      await this.persistence.createRoom({
+        roomId: persistenceId,
+        code,
+        name: `Phòng ${code}`,
+        hostUserId: player.userId,
+        capacity: CAPACITY,
+        bettingDurationSeconds: Math.round(room.bettingMs / 1000),
+      });
+    }
     this.rooms.set(code, room);
     this.addPlayer(room, player);
-    if (this.autoStart) this.openRound(room);
+    try {
+      if (this.autoStart) await this.openRound(room);
+    } catch (error) {
+      this.deleteRoom(room);
+      if (this.persistence) await this.persistence.closeRoom({ roomId: persistenceId });
+      throw error;
+    }
     this.changed(room);
     return this.success(room, player, true);
   }
 
-  join(socketId, payload) {
-    requireCondition(!this.memberships.has(socketId), 'ALREADY_IN_ROOM', 'Hãy rời phòng hiện tại trước.');
+  async join(socketId, payload, identity) {
     requireCondition(typeof payload.code === 'string' && /^[A-Z0-9]{6}$/.test(payload.code),
       'INVALID_CODE', 'Mã phòng gồm 6 chữ cái hoặc chữ số viết hoa.');
     const room = this.rooms.get(payload.code);
     requireCondition(room, 'ROOM_NOT_FOUND', 'Không tìm thấy phòng. Kiểm tra lại mã phòng.');
-    requireCondition(!room.locked, 'ROOM_LOCKED', 'Phòng đang khóa, chưa nhận người chơi mới.');
-    const name = this.name(payload.name);
-    requireCondition(room.players.size < CAPACITY, 'ROOM_FULL', 'Phòng đã đủ 20 người chơi.');
-    requireCondition(![...room.players.values()].some(player => player.name.toLocaleLowerCase('vi') === name.toLocaleLowerCase('vi')),
-      'NAME_TAKEN', 'Tên này đã có trong phòng. Vui lòng chọn tên khác.');
-    const player = this.player(name, socketId);
-    player.eligible = this.autoStart && room.phase === 'betting';
-    this.addPlayer(room, player);
-    this.scheduleHostTransfer(room);
-    this.changed(room);
-    return this.success(room, player, true);
+    return this.withRoomOperation(room, async () => {
+      requireCondition(this.rooms.get(payload.code) === room, 'ROOM_NOT_FOUND', 'Phòng không còn tồn tại.');
+      requireCondition(!this.memberships.has(socketId), 'ALREADY_IN_ROOM', 'Hãy rời phòng hiện tại trước.');
+      requireCondition(!room.locked, 'ROOM_LOCKED', 'Phòng đang khóa, chưa nhận người chơi mới.');
+      requireCondition(room.players.size < CAPACITY, 'ROOM_FULL', 'Phòng đã đủ 20 người chơi.');
+      const player = await this.playerFor(payload.name, socketId, identity);
+      requireCondition(![...room.players.values()].some(entry => entry.name.toLocaleLowerCase('vi') === player.name.toLocaleLowerCase('vi')),
+        'NAME_TAKEN', 'Tên này đã có trong phòng. Vui lòng chọn tên khác.');
+      if (this.persistence) {
+        requireCondition(![...room.players.values()].some(entry => entry.userId === player.userId),
+          'ALREADY_IN_ROOM', 'Tài khoản này đã tham gia phòng. Hãy dùng chức năng kết nối lại.');
+        await this.persistence.joinRoom({ roomId: room.persistenceId, userId: player.userId });
+      }
+      player.eligible = this.autoStart && room.phase === 'betting';
+      this.addPlayer(room, player);
+      this.scheduleHostTransfer(room);
+      this.changed(room);
+      return this.success(room, player, true);
+    });
   }
 
-  resume(socketId, payload) {
-    requireCondition(typeof payload.token === 'string' && payload.token.length <= 100,
-      'SESSION_EXPIRED', 'Phiên đã hết hạn. Vui lòng tạo hoặc vào phòng lại.');
-    const session = this.sessions.get(payload.token);
-    const room = session && this.rooms.get(session.code);
-    const player = room?.players.get(session.playerId);
-    requireCondition(player, 'SESSION_EXPIRED', 'Phiên đã hết hạn. Vui lòng tạo hoặc vào phòng lại.');
-    const current = this.memberships.get(socketId);
-    requireCondition(!current || (current.code === room.code && current.playerId === player.id),
-      'ALREADY_IN_ROOM', 'Hãy rời phòng hiện tại trước.');
-    const oldSocketId = player.socketId;
-    if (oldSocketId && oldSocketId !== socketId) this.memberships.delete(oldSocketId);
-    player.socketId = socketId;
-    player.connected = true;
-    player.disconnectedAt = null;
-    this.memberships.set(socketId, { code: room.code, playerId: player.id });
-    if (room.hostId === player.id) {
-      clearTimeout(room.hostTimer);
-      room.hostTimer = null;
+  async resume(socketId, payload, identity) {
+    let session = null;
+    let room = null;
+    if (this.persistence) {
+      requireCondition(typeof identity?.userId === 'string' && identity.userId.length > 0,
+        'AUTH_REQUIRED', 'Bạn cần đăng nhập trước khi kết nối lại.');
+      for (const candidate of this.rooms.values()) {
+        const player = [...candidate.players.values()].find(entry =>
+          entry.userId === identity.userId && !entry.pendingRemoval
+        );
+        if (player) {
+          room = candidate;
+          session = { code: candidate.code, playerId: player.id };
+          break;
+        }
+      }
+    } else {
+      requireCondition(typeof payload.token === 'string' && payload.token.length <= 100,
+        'SESSION_EXPIRED', 'Phiên đã hết hạn. Vui lòng tạo hoặc vào phòng lại.');
+      session = this.sessions.get(payload.token);
+      room = session && this.rooms.get(session.code);
     }
-    if (oldSocketId && oldSocketId !== socketId) this.onReplace(oldSocketId);
-    this.scheduleHostTransfer(room);
-    this.changed(room);
-    return this.success(room, player, true);
+    requireCondition(room, 'SESSION_EXPIRED', 'Phiên đã hết hạn. Vui lòng vào phòng lại.');
+    return this.withRoomOperation(room, async () => {
+      const activeSession = this.persistence
+        ? session
+        : this.sessions.get(payload.token);
+      const player = activeSession && room.players.get(activeSession.playerId);
+      requireCondition(player, 'SESSION_EXPIRED', 'Phiên đã hết hạn. Vui lòng vào phòng lại.');
+      if (this.persistence) {
+        requireCondition(identity.userId === player.userId && !player.pendingRemoval,
+          'AUTH_REQUIRED', 'Phiên đăng nhập không khớp với người chơi trong phòng.');
+      }
+      const current = this.memberships.get(socketId);
+      requireCondition(!current || (current.code === room.code && current.playerId === player.id),
+        'ALREADY_IN_ROOM', 'Hãy rời phòng hiện tại trước.');
+      const oldSocketId = player.socketId;
+      if (oldSocketId && oldSocketId !== socketId) this.memberships.delete(oldSocketId);
+      player.socketId = socketId;
+      player.connected = true;
+      player.disconnectedAt = null;
+      this.memberships.set(socketId, { code: room.code, playerId: player.id });
+      if (room.hostId === player.id) {
+        clearTimeout(room.hostTimer);
+        room.hostTimer = null;
+      }
+      if (oldSocketId && oldSocketId !== socketId) this.onReplace(oldSocketId);
+      this.scheduleHostTransfer(room);
+      this.changed(room);
+      return this.success(room, player, true);
+    });
   }
 
   hasUnsettledBet(room, player) {
     return ['betting', 'revealing'].includes(room.phase) && totalBets(player.bets) > 0;
   }
 
-  leave(room, player) {
+  async leave(room, player) {
     requireCondition(!this.hasUnsettledBet(room, player), 'UNSETTLED_BET', 'Hãy xóa cược hoặc chờ kết quả trước khi rời phòng.');
+    if (this.persistence) {
+      await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
+    }
     this.removePlayer(room, player);
     if (room.players.size === 0) this.deleteRoom(room);
     else this.changed(room);
@@ -342,15 +446,19 @@ export class GameService {
       'STALE_ROUND', 'Vòng chơi đã thay đổi. Vui lòng đồng bộ phòng.');
   }
 
-  mutate(room, player, event, payload) {
+  async mutate(room, player, event, payload) {
     if (event.startsWith('host:')) {
       this.host(room, player);
       this.currentNumber(room, payload);
-      this.administer(room, player, event, payload);
+      requireCondition(!this.persistence || ['host:kick', 'host:transfer'].includes(event),
+        'ADMIN_ONLY', 'Chức năng này đã được chuyển sang trang quản trị hệ thống.');
+      await this.administer(room, player, event, payload);
       return;
     }
     if (event === 'round:open' || event === 'room:reset') {
       this.host(room, player);
+      requireCondition(!this.persistence || event !== 'room:reset',
+        'ADMIN_ONLY', 'Reset dữ liệu phòng đã được chuyển sang quy trình quản trị có kiểm soát.');
       this.currentNumber(room, payload);
       const emptyBettingRound = event === 'room:reset' && room.phase === 'betting' &&
         [...room.players.values()].every(entry => totalBets(entry.bets) === 0);
@@ -362,21 +470,23 @@ export class GameService {
         room.demoRound = false;
         room.gameId = randomUUID();
         room.phase = 'waiting';
-        room.roundNumber = 0;
+        if (!this.persistence) room.roundNumber = 0;
         room.roundId = null;
-        room.history = [];
+        if (!this.persistence) room.history = [];
         room.dice = [];
         for (const entry of room.players.values()) {
-          entry.balance = this.config.initialBalance;
-          entry.stats = this.emptyStats();
+          if (!this.persistence) {
+            entry.balance = this.config.initialBalance;
+            entry.stats = this.emptyStats();
+          }
           entry.bets = this.emptyBets();
           entry.lastResult = null;
           entry.eligible = false;
           entry.requests.clear();
         }
-        if (this.autoStart) this.openRound(room);
+        if (this.autoStart) await this.openRound(room);
       } else {
-        this.openRound(room);
+        await this.openRound(room);
       }
       return;
     }
@@ -393,7 +503,17 @@ export class GameService {
 
     requireCondition(player.eligible, 'WAIT_NEXT_ROUND', 'Bạn sẽ tham gia đặt cược từ vòng tiếp theo.');
     if (event === 'bet:clear') {
-      player.balance += totalBets(player.bets);
+      if (this.persistence) {
+        const result = await this.persistence.clearBets({
+          userId: player.userId,
+          roomId: room.persistenceId,
+          roundId: room.roundId,
+          requestId: payload.requestId,
+        });
+        player.balance = result.balance;
+      } else {
+        player.balance += totalBets(player.bets);
+      }
       player.bets = this.emptyBets();
       return;
     }
@@ -406,8 +526,31 @@ export class GameService {
       'INSUFFICIENT_BALANCE', 'Số xu còn lại không đủ để đặt cược này.');
     requireCondition(player.balance + 4 * totalBets(player.bets) + 3 * amount <= MAX_BALANCE,
       'BALANCE_LIMIT', 'Cược vượt giới hạn xu an toàn của phòng.');
-    player.balance -= amount;
-    player.bets[payload.symbol] += amount;
+    if (this.persistence) {
+      const result = await this.persistence.placeBet({
+        userId: player.userId,
+        roomId: room.persistenceId,
+        roundId: room.roundId,
+        symbol: payload.symbol,
+        amount,
+        requestId: payload.requestId,
+      });
+      player.balance = result.balance;
+      if (!result.isDuplicate) player.bets[payload.symbol] += amount;
+    } else {
+      player.balance -= amount;
+      player.bets[payload.symbol] += amount;
+    }
+  }
+
+  async removePendingPlayers(room) {
+    for (const player of [...room.players.values()]) {
+      if (!player.pendingRemoval) continue;
+      if (this.persistence) {
+        await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
+      }
+      this.removePlayer(room, player);
+    }
   }
 
   clearPhaseTimer(room) {
@@ -424,20 +567,35 @@ export class GameService {
     room.deadline = Date.now() + duration;
     const roundId = room.roundId;
     const phase = room.phase;
-    room.phaseTimer = setTimeout(() => {
-      if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== phase || room.paused) return;
-      if (phase === 'betting') this.shake(room);
-      else if (phase === 'result') this.openRound(room);
-      this.changed(room);
+    room.phaseTimer = setTimeout(async () => {
+      try {
+        await this.withRoomOperation(room, async () => {
+          if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== phase || room.paused) return;
+          if (phase === 'betting') this.shake(room);
+          else if (phase === 'result') await this.openRound(room);
+          this.changed(room);
+        });
+      } catch (error) {
+        console.error('Automatic phase transition failed:', error);
+      }
     }, duration);
     room.phaseTimer.unref();
   }
 
-  openRound(room) {
+  async openRound(room) {
     this.clearPhaseTimer(room);
+    const roundNumber = room.roundNumber + 1;
+    const roundId = randomUUID();
+    if (this.persistence) {
+      await this.persistence.createRound({
+        roomId: room.persistenceId,
+        roundId,
+        roundNumber,
+      });
+    }
     room.phase = 'betting';
-    room.roundNumber += 1;
-    room.roundId = randomUUID();
+    room.roundNumber = roundNumber;
+    room.roundId = roundId;
     room.dice = [];
     room.demoRound = false;
     for (const entry of room.players.values()) {
@@ -452,16 +610,20 @@ export class GameService {
     this.clearPhaseTimer(room);
     room.phase = 'revealing';
     const roundId = room.roundId;
-    room.revealTimer = setTimeout(() => {
+    room.revealTimer = setTimeout(async () => {
       if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== 'revealing') return;
       room.revealTimer = null;
-      this.settle(room);
-      this.changed(room);
+      try {
+        await this.settle(room);
+        this.changed(room);
+      } catch (error) {
+        console.error('Automatic settlement failed:', error);
+      }
     }, this.revealMs);
     room.revealTimer.unref();
   }
 
-  administer(room, host, event, payload) {
+  async administer(room, host, event, payload) {
     if (event === 'host:lock') {
       requireCondition(typeof payload.locked === 'boolean', 'INVALID_VALUE', 'Trạng thái khóa không hợp lệ.');
       room.locked = payload.locked;
@@ -495,7 +657,8 @@ export class GameService {
       for (const entry of room.players.values()) {
         entry.balance += totalBets(entry.bets);
       }
-      this.openRound(room);
+      await this.removePendingPlayers(room);
+      await this.openRound(room);
       return;
     }
     const target = room.players.get(payload.playerId);
@@ -511,29 +674,85 @@ export class GameService {
       requireCondition(target.id !== host.id, 'INVALID_TARGET', 'Hãy dùng nút rời phòng để rời bàn.');
       requireCondition(room.phase !== 'revealing', 'WRONG_PHASE', 'Chờ kết quả trước khi đuổi người chơi.');
       const socketId = target.socketId;
-      this.removePlayer(room, target);
+      if (this.hasUnsettledBet(room, target)) {
+        // Revoke room access immediately, but keep the accepted stake in the
+        // round until settlement commits. Removing it here would erase the
+        // payout obligation or incorrectly refund a single player's bet.
+        this.memberships.delete(socketId);
+        this.sessions.delete(target.token);
+        target.connected = false;
+        target.socketId = null;
+        target.disconnectedAt = Date.now();
+        target.pendingRemoval = true;
+      } else {
+        if (this.persistence) {
+          await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: target.userId });
+        }
+        this.removePlayer(room, target);
+      }
       if (socketId) this.onKick(socketId);
     } else if (event === 'host:transfer') {
       requireCondition(target.id !== host.id && target.connected, 'INVALID_TARGET', 'Chọn một người chơi khác đang online.');
+      if (this.persistence) {
+        await this.persistence.transferHost({
+          roomId: room.persistenceId,
+          fromUserId: host.userId,
+          toUserId: target.userId,
+        });
+      }
       clearTimeout(room.hostTimer);
       room.hostTimer = null;
       room.hostId = target.id;
     }
   }
 
-  settle(room) {
+  async settle(room) {
+    return this.withRoomOperation(room, () => this.settleUnlocked(room));
+  }
+
+  async settleUnlocked(room) {
     if (!['revealing', 'betting'].includes(room.phase)) return;
     this.clearPhaseTimer(room);
-    room.demoRound = Boolean(room.forcedDice);
+    const demoRound = Boolean(room.forcedDice);
     const dice = room.forcedDice ?? Array.from({ length: 3 }, () => this.symbolIds[this.randomIntFn(this.symbolIds.length)]);
-    room.forcedDice = null;
-    const results = [];
+    const pendingResults = [];
     for (const player of room.players.values()) {
       const totalBet = totalBets(player.bets);
       if (totalBet === 0) continue;
       const totalReturn = calculateReturn(player.bets, dice);
       const profit = totalReturn - totalBet;
-      player.balance += totalReturn;
+      pendingResults.push({ player, userId: player.userId, totalBet, totalReturn, profit });
+    }
+
+    let persistedPlayers = new Map();
+    let committedDice = dice;
+    if (this.persistence) {
+      const settlement = await this.persistence.settleRound({
+        roomId: room.persistenceId,
+        roundId: room.roundId,
+        dice,
+        playerResults: pendingResults.map(({ userId, totalBet, totalReturn }) => ({ userId, totalBet, totalReturn })),
+      });
+      persistedPlayers = new Map(settlement.players.map(result => [result.userId, result]));
+      committedDice = settlement.dice ?? dice;
+    }
+
+    room.demoRound = demoRound;
+    room.forcedDice = null;
+    const results = [];
+    for (const pending of pendingResults) {
+      const { player } = pending;
+      let { totalBet, totalReturn, profit } = pending;
+      if (this.persistence) {
+        const persisted = persistedPlayers.get(player.userId);
+        requireCondition(persisted, 'DATABASE_CONFLICT', 'Thiếu kết quả ví sau khi thanh toán vòng chơi.');
+        player.balance = persisted.balance;
+        totalBet = persisted.totalBet;
+        totalReturn = persisted.totalReturn;
+        profit = totalReturn - totalBet;
+      } else {
+        player.balance += totalReturn;
+      }
       player.stats.gamesPlayed += 1;
       player.stats[profit > 0 ? 'wins' : profit < 0 ? 'losses' : 'breakEven'] += 1;
       player.stats.highestBalance = Math.max(player.stats.highestBalance, player.balance);
@@ -542,15 +761,16 @@ export class GameService {
       player.lastResult = { playerId: player.id, name: player.name, totalBet, totalReturn, profit, balance: player.balance };
       results.push({ ...player.lastResult });
     }
-    room.dice = dice;
+    room.dice = committedDice;
     room.phase = 'result';
     room.history.unshift({
-      id: room.roundId, number: room.roundNumber, dice: [...dice], createdAt: new Date().toISOString(),
+      id: room.roundId, number: room.roundNumber, dice: [...committedDice], createdAt: new Date().toISOString(),
       demo: room.demoRound,
       totalBet: results.reduce((sum, result) => sum + result.totalBet, 0),
       totalReturn: results.reduce((sum, result) => sum + result.totalReturn, 0), results,
     });
     room.history = room.history.slice(0, 20);
+    await this.removePendingPlayers(room);
     if (this.autoStart) this.schedulePhase(room, this.resultMs);
   }
 
@@ -572,38 +792,61 @@ export class GameService {
     const host = room.players.get(room.hostId);
     if (!host || host.connected || room.hostTimer) return;
     const remaining = Math.max(0, this.hostGraceMs - (Date.now() - host.disconnectedAt));
-    room.hostTimer = setTimeout(() => {
+    room.hostTimer = setTimeout(async () => {
       room.hostTimer = null;
-      if (this.rooms.get(room.code) !== room || room.players.get(room.hostId)?.connected) return;
-      const replacement = [...room.players.values()].find(player => player.connected);
-      if (replacement) {
-        room.hostId = replacement.id;
-        this.changed(room);
+      try {
+        await this.withRoomOperation(room, async () => {
+          if (this.rooms.get(room.code) !== room || room.players.get(room.hostId)?.connected) return;
+          const replacement = [...room.players.values()].find(player => player.connected);
+          if (!replacement) return;
+          if (this.persistence) {
+            await this.persistence.transferHost({
+              roomId: room.persistenceId,
+              fromUserId: host.userId,
+              toUserId: replacement.userId,
+            });
+          }
+          room.hostId = replacement.id;
+          this.changed(room);
+        });
+      } catch (error) {
+        console.error('Automatic host transfer failed:', error);
       }
     }, remaining);
     room.hostTimer.unref();
   }
 
-  cleanup() {
+  async cleanup() {
     const now = Date.now();
-    for (const room of this.rooms.values()) {
-      const hasConnectedPlayer = [...room.players.values()].some(player => player.connected);
-      const lastDisconnect = Math.max(...[...room.players.values()].map(player => player.disconnectedAt ?? now));
-      if (!hasConnectedPlayer && now - lastDisconnect >= this.roomTtlMs) {
-        // Resolve accepted stakes before expiring an abandoned in-memory room.
-        if (['betting', 'revealing'].includes(room.phase)) this.settle(room);
-        this.deleteRoom(room);
-        continue;
-      }
-      let removed = false;
-      for (const player of room.players.values()) {
-        if (!player.connected && now - player.disconnectedAt >= this.disconnectTtlMs && !this.hasUnsettledBet(room, player)) {
-          this.removePlayer(room, player);
-          removed = true;
+    for (const room of [...this.rooms.values()]) {
+      await this.withRoomOperation(room, async () => {
+        if (this.rooms.get(room.code) !== room) return;
+        const hasConnectedPlayer = [...room.players.values()].some(player => player.connected);
+        const lastDisconnect = Math.max(...[...room.players.values()].map(player => player.disconnectedAt ?? now));
+        if (!hasConnectedPlayer && now - lastDisconnect >= this.roomTtlMs) {
+          // Resolve accepted stakes before expiring an abandoned in-memory room.
+          if (['betting', 'revealing'].includes(room.phase)) await this.settleUnlocked(room);
+          if (this.persistence) await this.persistence.closeRoom({ roomId: room.persistenceId });
+          this.deleteRoom(room);
+          return;
         }
-      }
-      if (room.players.size === 0) this.deleteRoom(room);
-      else if (removed) this.changed(room);
+        let removed = false;
+        for (const player of room.players.values()) {
+          if (!player.connected && now - player.disconnectedAt >= this.disconnectTtlMs && !this.hasUnsettledBet(room, player)) {
+            if (this.persistence) {
+              await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
+            }
+            this.removePlayer(room, player);
+            removed = true;
+          }
+        }
+        if (room.players.size === 0) {
+          if (this.persistence) await this.persistence.closeRoom({ roomId: room.persistenceId });
+          this.deleteRoom(room);
+        } else if (removed) {
+          this.changed(room);
+        }
+      });
     }
   }
 

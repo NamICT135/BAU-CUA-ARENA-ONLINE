@@ -44,6 +44,86 @@ export function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function pagination(url) {
+  return {
+    limit: Math.min(Math.max(Number(url.searchParams.get('limit')) || 20, 1), 100),
+    offset: Math.max(Number(url.searchParams.get('offset')) || 0, 0),
+  };
+}
+
+async function handlePersistentDataApi(req, res, url, options) {
+  const roomHistoryMatch = /^\/api\/rooms\/([^/]+)\/history$/.exec(url.pathname);
+  const roomStatsMatch = /^\/api\/rooms\/([^/]+)\/symbol-statistics$/.exec(url.pathname);
+  const personalRoutes = new Set([
+    '/api/me',
+    '/api/me/wallet',
+    '/api/me/wallet/transactions',
+    '/api/me/history',
+    '/api/me/stats',
+  ]);
+  if (!personalRoutes.has(url.pathname) && !roomHistoryMatch && !roomStatsMatch) return false;
+  if (req.method !== 'GET') {
+    sendJson(res, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'Method not allowed' } });
+    return true;
+  }
+  if (!options.persistence) {
+    sendJson(res, 503, { error: { code: 'DATABASE_UNAVAILABLE', message: 'Database mode is not enabled.' } });
+    return true;
+  }
+  if (typeof options.authenticateHttp !== 'function') {
+    sendJson(res, 503, { error: { code: 'AUTH_NOT_CONFIGURED', message: 'HTTP authentication is not configured.' } });
+    return true;
+  }
+
+  try {
+    const identity = await options.authenticateHttp(req);
+    if (!identity || typeof identity.userId !== 'string' || identity.userId.length === 0) {
+      sendJson(res, 401, { error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+      return true;
+    }
+
+    const page = pagination(url);
+    if (url.pathname === '/api/me') {
+      const profile = await options.persistence.getPlayerProfile(identity.userId);
+      sendJson(res, 200, { data: profile });
+    } else if (url.pathname === '/api/me/wallet') {
+      const profile = await options.persistence.getPlayerProfile(identity.userId);
+      sendJson(res, 200, { data: { userId: profile.userId, balance: profile.balance } });
+    } else if (url.pathname === '/api/me/wallet/transactions') {
+      const transactions = await options.persistence.getWalletTransactions({ userId: identity.userId, ...page });
+      sendJson(res, 200, { data: transactions, pagination: page });
+    } else if (url.pathname === '/api/me/history') {
+      const history = await options.persistence.getPlayerHistory({ userId: identity.userId, ...page });
+      sendJson(res, 200, { data: history, pagination: page });
+    } else if (url.pathname === '/api/me/stats') {
+      const statistics = await options.persistence.getPlayerStatistics(identity.userId);
+      sendJson(res, 200, { data: statistics });
+    } else if (roomHistoryMatch) {
+      const roomCode = decodeURIComponent(roomHistoryMatch[1]).toUpperCase();
+      const history = await options.persistence.getRoomHistory({ roomCode, ...page });
+      sendJson(res, 200, { data: history, pagination: page });
+    } else {
+      const roomCode = decodeURIComponent(roomStatsMatch[1]).toUpperCase();
+      const statistics = await options.persistence.getSymbolStatistics({ roomCode });
+      sendJson(res, 200, { data: statistics });
+    }
+  } catch (error) {
+    const knownCode = typeof error?.code === 'string' ? error.code : 'INTERNAL_ERROR';
+    const status = knownCode === 'AUTH_REQUIRED' ? 401
+      : knownCode === 'ACCOUNT_DISABLED' ? 403
+        : knownCode === 'DATABASE_UNAVAILABLE' ? 503
+          : 500;
+    if (status === 500) console.error('Persistent data API failed:', error);
+    sendJson(res, status, {
+      error: {
+        code: knownCode,
+        message: status === 500 ? 'Server error' : error.message,
+      },
+    });
+  }
+  return true;
+}
+
 function validateConfig(config) {
   if (!config || !Number.isSafeInteger(config.initialBalance) || config.initialBalance <= 0 ||
       !Array.isArray(config.chips) || config.chips.length === 0 ||
@@ -58,6 +138,9 @@ function validateConfig(config) {
 export async function createGameServer(options = {}) {
   const config = structuredClone(options.config ?? JSON.parse(await readFile(resolve(projectRoot, 'game-config.json'), 'utf8')));
   validateConfig(config);
+  if (options.persistence && typeof options.persistence.recoverInterruptedGames === 'function') {
+    await options.persistence.recoverInterruptedGames();
+  }
   const distRoot = resolve(options.distDir ?? resolve(projectRoot, 'dist'));
   let game;
   const httpServer = createServer(async (req, res) => {
@@ -72,6 +155,7 @@ export async function createGameServer(options = {}) {
       if (req.method === 'GET' && url.pathname === '/api/health') {
         return sendJson(res, 200, { ok: true, rooms: game.rooms.size, players: game.sessions.size });
       }
+      if (await handlePersistentDataApi(req, res, url, options)) return;
       if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
       if (!['GET', 'HEAD'].includes(req.method)) return sendJson(res, 404, { error: 'Not found' });
 
@@ -126,22 +210,80 @@ export async function createGameServer(options = {}) {
     },
   });
 
+  if (typeof options.authenticateSocket === 'function') {
+    io.use(async (socket, next) => {
+      try {
+        const identity = await options.authenticateSocket(socket);
+        if (!identity || typeof identity.userId !== 'string') {
+          next(new Error('AUTH_REQUIRED'));
+          return;
+        }
+        socket.data.identity = identity;
+        next();
+      } catch (error) {
+        console.error('Socket authentication failed:', error);
+        next(new Error('AUTH_REQUIRED'));
+      }
+    });
+  }
+
   io.on('connection', socket => {
     let windowStart = Date.now();
     let eventCount = 0;
+    const isRateLimited = () => {
+      if (Date.now() - windowStart >= 10_000) {
+        windowStart = Date.now();
+        eventCount = 0;
+      }
+      eventCount += 1;
+      return eventCount > (options.maxEventsPerWindow ?? 100);
+    };
+
+    const authorizeCommand = async (event, payload) => {
+      if (typeof options.authorizeSocketCommand !== 'function') {
+        return socket.data.identity ?? null;
+      }
+      const identity = await options.authorizeSocketCommand(
+        socket,
+        event,
+        payload,
+        socket.data.identity ?? null
+      );
+      if (!identity || typeof identity.userId !== 'string' || identity.userId.length === 0) {
+        const error = new Error('Bạn cần đăng nhập lại.');
+        error.code = 'AUTH_REQUIRED';
+        throw error;
+      }
+      if (socket.data.identity?.userId && socket.data.identity.userId !== identity.userId) {
+        const error = new Error('Phiên đăng nhập không khớp với kết nối hiện tại.');
+        error.code = 'AUTH_REQUIRED';
+        throw error;
+      }
+      socket.data.identity = identity;
+      return identity;
+    };
+
     for (const event of events) {
-      socket.on(event, (payload, acknowledge) => {
+      socket.on(event, async (payload, acknowledge) => {
         if (typeof acknowledge !== 'function') return;
-        if (Date.now() - windowStart >= 10_000) {
-          windowStart = Date.now();
-          eventCount = 0;
-        }
-        eventCount += 1;
-        if (eventCount > (options.maxEventsPerWindow ?? 100)) {
+        if (isRateLimited()) {
           acknowledge({ ok: false, error: { code: 'RATE_LIMIT', message: 'Bạn thao tác quá nhanh. Vui lòng chờ một chút.' } });
           return;
         }
-        acknowledge(game.handle(socket.id, event, payload));
+        try {
+          const identity = await authorizeCommand(event, payload);
+          acknowledge(await game.handle(socket.id, event, payload, identity));
+        } catch (error) {
+          const authError = error?.code === 'AUTH_REQUIRED';
+          if (!authError) console.error('Socket command failed:', error);
+          acknowledge({
+            ok: false,
+            error: {
+              code: authError ? 'AUTH_REQUIRED' : 'INTERNAL_ERROR',
+              message: authError ? error.message : 'Có lỗi xảy ra. Vui lòng đồng bộ phòng rồi thử lại.',
+            },
+          });
+        }
       });
     }
 
