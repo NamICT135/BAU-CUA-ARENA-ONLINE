@@ -1,4 +1,3 @@
-# HƯỚNG DẪN DATABASE FOUNDATION (PHẦN A)
 ## Dự án Bầu Cua Arena — Tầng Dữ Liệu PostgreSQL
 
 Tài liệu này bàn giao toàn bộ nền tảng Database, Schema chuẩn hóa và các Service/Repository của **Phần A** để người phụ trách **Phần B (Game Integration)** sử dụng.
@@ -76,7 +75,7 @@ trong `.env.test`; file này không được commit.
 
 ---
 
-## 4. API & Repositories Bàn Giao Cho Phần B
+## 4. API & Repositories
 
 ### 4.1. `WalletService` (`src/services/WalletService.js`)
 Service chính xử lý tiền xu và sổ cái an toàn (có row-lock `FOR UPDATE` + DB transaction):
