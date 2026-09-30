@@ -60,9 +60,19 @@ DB_NAME_TEST=bau_cua_test
 # Chạy migration (001_create_initial_schema.sql gộp duy nhất)
 npm run db:migrate
 
-# Chạy toàn bộ Test Suite (56/56 tests pass)
-npm test
+# Chạy test không cần PostgreSQL
+npm run test:core
+
+# Chạy migration và toàn bộ database tests trên DB_NAME_TEST/TEST_DATABASE_URL
+npm run test:db
+
+# Chạy cả core tests và database tests
+npm run test:all
 ```
+
+`test:db` từ chối chạy nếu tên database không chứa `test`, nhằm tránh ghi dữ liệu
+fixture vào database development hoặc production. Có thể đặt cấu hình test riêng
+trong `.env.test`; file này không được commit.
 
 ---
 

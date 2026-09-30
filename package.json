@@ -10,7 +10,10 @@
     "server": "node server.js",
     "prestart": "npm run build",
     "start": "node server.js",
-    "test": "node --test tests/**/*.test.js",
+    "test": "npm run test:all",
+    "test:core": "node --test tests/automatic.test.js tests/database-game-integration.test.js tests/game.test.js tests/history.test.js tests/media.test.js tests/multiplayer.test.js",
+    "test:db": "node scripts/run-db-tests.js",
+    "test:all": "npm run test:core && npm run test:db",
     "build": "vite build",
     "preview": "vite preview",
     "db:migrate": "node scripts/db-migrate.js"

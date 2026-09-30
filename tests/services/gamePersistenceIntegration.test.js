@@ -31,6 +31,7 @@ async function removeAccountFixture(userId) {
   if (!userId) return;
   await query('DELETE FROM processed_commands WHERE user_id = $1', [userId]);
   await query('DELETE FROM rooms WHERE host_id = $1', [userId]);
+  await query('DELETE FROM wallet_transactions WHERE user_id = $1', [userId]);
   await query('DELETE FROM users WHERE id = $1', [userId]);
 }
 
@@ -46,12 +47,13 @@ test('Part B persists a complete GameService bet and settlement in PostgreSQL', 
   const identity = { userId, role: 'player' };
   const persistence = new GamePersistenceService();
   const dice = ['cua', 'bau', 'ga'];
+  const diceIndices = dice.map(id => config.symbols.findIndex(symbol => symbol.id === id));
   let diceIndex = 0;
   game = new GameService(config, {
     autoStart: false,
     revealMs: 60_000,
     persistence,
-    randomIntFn: () => config.symbols.findIndex(symbol => symbol.id === dice[diceIndex++]),
+    randomIntFn: () => diceIndices[diceIndex++],
   });
 
   const created = await accepted(game, 'part-b-socket', 'room:create', { name: 'Client name is ignored' }, identity);

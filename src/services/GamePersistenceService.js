@@ -101,13 +101,12 @@ async function insertLedger(client, {
 }) {
   await client.query(
     `INSERT INTO wallet_transactions
-      (wallet_id, user_id, type, transaction_type, amount, balance_before, balance_after,
+      (wallet_id, user_id, transaction_type, amount, balance_before, balance_after,
        room_id, round_id, idempotency_key, reason)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       walletId,
       userId,
-      transactionType.toLowerCase(),
       transactionType,
       BigInt(amount).toString(),
       balanceBefore.toString(),

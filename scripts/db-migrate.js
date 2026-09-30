@@ -6,7 +6,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { pool, closePool } from '../src/db/connection.js';
+import { getClient, closePool } from '../src/db/connection.js';
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
@@ -27,7 +27,7 @@ async function appliedMigrations(client) {
 }
 
 async function main() {
-  const client = await pool.connect();
+  const client = await getClient();
   try {
     await ensureMigrationsTable(client);
     const applied = await appliedMigrations(client);
