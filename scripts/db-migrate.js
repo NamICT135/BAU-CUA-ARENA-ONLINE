@@ -6,9 +6,10 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { getClient, closePool } from '../src/db/connection.js';
+import { getClient, closePool } from '../server/db/connection.js';
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+const migrationLockId = 824028311;
 
 async function ensureMigrationsTable(client) {
   await client.query(`
@@ -29,6 +30,7 @@ async function appliedMigrations(client) {
 async function main() {
   const client = await getClient();
   try {
+    await client.query('SELECT pg_advisory_lock($1)', [migrationLockId]);
     await ensureMigrationsTable(client);
     const applied = await appliedMigrations(client);
 
@@ -49,7 +51,9 @@ async function main() {
 
       if (previous) {
         if (previous !== checksum) {
-          console.warn(`⚠  ${filename} đã chạy nhưng nội dung đã thay đổi so với bản ghi trong schema_migrations.`);
+          console.error(`✗ ${filename} đã chạy nhưng checksum không còn khớp. Không được sửa migration đã áp dụng.`);
+          process.exitCode = 1;
+          return;
         }
         continue;
       }
@@ -71,6 +75,11 @@ async function main() {
 
     console.log(count === 0 ? '✓ Database đã ở phiên bản mới nhất.' : `✓ Đã áp dụng ${count} migration.`);
   } finally {
+    try {
+      await client.query('SELECT pg_advisory_unlock($1)', [migrationLockId]);
+    } catch {
+      // The lock is released automatically if the connection was lost.
+    }
     client.release();
     await closePool();
   }

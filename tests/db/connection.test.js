@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { pool, checkConnection, query } from '../../src/db/connection.js';
+import { pool, checkConnection, query } from '../../server/db/connection.js';
 
 describe('Database Connection & Schema Test Suite', () => {
   test('Should connect to PostgreSQL successfully', async () => {
@@ -9,7 +9,7 @@ describe('Database Connection & Schema Test Suite', () => {
     assert.strictEqual(typeof status.database, 'string');
   });
 
-  test('Should query all 11 tables from schema', async () => {
+  test('Should query all 13 domain tables from schema', async () => {
     const expectedTables = [
       'users',
       'wallets',
@@ -20,6 +20,8 @@ describe('Database Connection & Schema Test Suite', () => {
       'room_members',
       'rounds',
       'bets',
+      'player_round_results',
+      'processed_commands',
       'ad_reward_sessions',
       'admin_audit_logs'
     ];
@@ -43,5 +45,49 @@ describe('Database Connection & Schema Test Suite', () => {
     } finally {
       client.release();
     }
+  });
+
+  test('Should apply the database hardening migration', async () => {
+    const migration = await query(
+      'SELECT filename FROM schema_migrations WHERE filename = $1',
+      ['002_harden_database_contract.sql']
+    );
+    assert.strictEqual(migration.rowCount, 1);
+
+    const indexes = await query(
+      `SELECT indexname FROM pg_indexes
+       WHERE schemaname = 'public'
+         AND indexname = ANY($1::text[])`,
+      [[
+        'idx_users_username_lower_unique',
+        'idx_unique_active_host_per_room',
+        'idx_unique_unfinished_round_per_room',
+      ]]
+    );
+    assert.strictEqual(indexes.rowCount, 3);
+
+    const requiredColumns = await query(
+      `SELECT table_name, column_name, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND (table_name, column_name) IN (
+           ('wallet_transactions', 'idempotency_key'),
+           ('bets', 'request_id')
+         )`,
+    );
+    assert.strictEqual(requiredColumns.rowCount, 2);
+    assert.ok(requiredColumns.rows.every(column => column.is_nullable === 'NO'));
+
+    const constraints = await query(
+      `SELECT conname FROM pg_constraint
+       WHERE conname = ANY($1::text[])`,
+      [[
+        'txn_balance_equation',
+        'bet_payout_non_negative',
+        'player_round_totals_valid',
+        'balance_safe_integer',
+      ]]
+    );
+    assert.strictEqual(constraints.rowCount, 4);
   });
 });

@@ -1,5 +1,31 @@
 # Kết quả kiểm thử multiplayer
 
+## Kết quả mới nhất — 01/10/2026
+
+Sau khi sắp xếp lại thư mục: `npm test` vẫn đạt **105/105** (49 client/server + 56 PostgreSQL, không skip); `npm run build` thành công cho cả game và Admin. Kiểm tra HTTP với bản build xác nhận cả `/` và `/admin` trả 200, cùng 55 URL tài nguyên; API cấu hình vẫn đọc đủ 6 biểu tượng ở `config/game-config.json`. Đã xác nhận 44 file có mặt ở đường dẫn mới và không còn bản trùng ở đường dẫn cũ. Xem [cấu trúc và danh sách file đã dọn](PROJECT_STRUCTURE.md).
+
+`npm run test:all`: **105/105** đạt (49 core + 56 PostgreSQL), không skip.
+`npm run build` thành công. Database dev/test đã ở migration `007`.
+Các bài mới kiểm tra đăng ký đồng thời, Argon2/session/CSRF, thu hồi phiên,
+email token một lần, MFA/replay/rate limit, phân quyền HTTP/Socket,
+Admin cấp xu idempotent/audit, kick/ban/xóa mềm, pause deadline,
+khóa/chỉnh thời gian/hủy ván và bảo toàn cược đã khóa.
+Đã thêm kiểm thử khởi động `npm run dev`: API đăng nhập/Admin đi qua Vite
+đến backend xác thực thật, không còn trỏ vào server RAM thiếu route (404).
+Proxy giữ nguyên Host của trình duyệt: đăng ký qua IP LAN/cổng tùy chọn
+đến được bước kiểm tra dữ liệu; Origin khác Host vẫn bị từ chối (403).
+Hộp thoại thao tác Admin không dùng `window.prompt()`: có lý do 3–255 ký tự,
+kiểm tra khoảng trắng, Hủy/Escape, focus, chống dùng lại xác nhận giữa hai thao tác.
+Đã kiểm tra mở và hủy hộp thoại ngay trong trình duyệt của ứng dụng; không
+thực hiện thao tác quản trị lên phòng dev thật trong bước kiểm tra này.
+
+Browser QA: đăng nhập/MFA Admin, tìm người chơi, cấp xu + audit, và cập nhật hồ sơ
+qua API thật; chỉ dùng fixture `bau_cua_test`, đã dọn fixture QA.
+Chưa đo trên Internet, chưa gửi email SMTP thật hoặc chạy quảng cáo thật.
+Chi tiết bàn giao: [Giai đoạn 3 — Admin](PHASE_3_ADMIN.md).
+
+## Lịch sử kiểm thử bản RAM trước đây
+
 Ngày kiểm tra: **14/09/2026**. Môi trường Windows, Node.js 24.x, Socket.IO 4.8.3, Vite 8.2.2. Đây là kết quả cục bộ; chưa triển khai Render hay đo trên mạng di động thật.
 
 ## Tự động

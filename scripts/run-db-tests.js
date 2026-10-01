@@ -70,8 +70,7 @@ runNode(['scripts/db-migrate.js'], testEnvironment);
 const files = [
   ...await testFiles('tests/db'),
   ...await testFiles('tests/repositories'),
-  'tests/services/walletService.test.js',
-  'tests/services/gamePersistenceIntegration.test.js',
+  ...await testFiles('tests/services'),
 ];
 
 runNode(['--test', '--test-concurrency=1', ...files], testEnvironment);

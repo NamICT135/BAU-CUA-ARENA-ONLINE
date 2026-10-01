@@ -1,8 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { UserRepository } from '../../src/repositories/UserRepository.js';
-import { RoomRepository } from '../../src/repositories/RoomRepository.js';
-import { BetRepository } from '../../src/repositories/BetRepository.js';
+import { UserRepository } from '../../server/repositories/UserRepository.js';
+import { RoomRepository } from '../../server/repositories/RoomRepository.js';
+import { BetRepository } from '../../server/repositories/BetRepository.js';
+import { WalletService } from '../../server/services/WalletService.js';
+import { query } from '../../server/db/connection.js';
 
 describe('BetRepository.settleBets() & calculateRoundResults() Test Suite', () => {
   const userRepo = new UserRepository();
@@ -35,12 +37,16 @@ describe('BetRepository.settleBets() & calculateRoundResults() Test Suite', () =
       passwordHash: 'hash',
       displayName: 'Player 2',
     });
+    await WalletService.createWalletWithWelcomeGrant(host.id);
+    await WalletService.createWalletWithWelcomeGrant(player1.id);
+    await WalletService.createWalletWithWelcomeGrant(player2.id);
 
     room = await roomRepo.createRoom({
       code: 'T' + Math.floor(1000 + Math.random() * 9000),
       name: 'Settlement Room',
       hostId: host.id,
     });
+    await query(`INSERT INTO room_members(room_id,user_id,role) VALUES($1,$2,'player'),($1,$3,'player')`, [room.id, player1.id, player2.id]);
 
     round = await betRepo.createRound(room.id, 1);
   });
@@ -98,6 +104,14 @@ describe('BetRepository.settleBets() & calculateRoundResults() Test Suite', () =
     assert.strictEqual(parseInt(p2.total_return, 10), 40000);
     assert.strictEqual(parseInt(p2.net_gain, 10), 20000);
     assert.strictEqual(p2.outcome, 'win');
+
+    const wallets = await query(
+      'SELECT user_id, balance FROM wallets WHERE user_id = ANY($1::uuid[]) ORDER BY user_id',
+      [[player1.id, player2.id]]
+    );
+    const balances = new Map(wallets.rows.map(wallet => [wallet.user_id, Number(wallet.balance)]));
+    assert.strictEqual(balances.get(player1.id), 115000);
+    assert.strictEqual(balances.get(player2.id), 120000);
   });
 
   test('settleBets should prevent double-settlement (idempotent)', async () => {

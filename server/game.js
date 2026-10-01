@@ -8,9 +8,9 @@ const BETTING_DURATION_SECONDS = new Set([15, 30, 45, 60]);
 const MAX_AMOUNT = 1_000_000_000;
 const MAX_BALANCE = 1_000_000_000_000;
 const PERSISTENCE_ERROR_CODES = new Set([
-  'ACCOUNT_DISABLED', 'AUTH_REQUIRED', 'BETTING_CLOSED', 'DATABASE_CONFLICT',
+  'ACCOUNT_DISABLED', 'ALREADY_IN_ROOM', 'AUTH_REQUIRED', 'BETTING_CLOSED', 'DATABASE_CONFLICT',
   'DATABASE_UNAVAILABLE', 'DATABASE_VALUE_OUT_OF_RANGE', 'INSUFFICIENT_BALANCE',
-  'ROUND_ALREADY_SETTLED', 'ROUND_NOT_FOUND', 'WALLET_NOT_FOUND',
+  'ROOM_FULL', 'ROOM_NOT_FOUND', 'ROUND_ALREADY_SETTLED', 'ROUND_NOT_FOUND', 'UNSETTLED_BET', 'WALLET_NOT_FOUND',
 ]);
 
 class GameError extends Error {
@@ -147,15 +147,21 @@ export class GameService {
       roundNumber: room.roundNumber, roundId: room.roundId, revision: room.revision,
       serverNow: Date.now(), deadline: room.deadline, paused: room.paused, bettingMs: room.bettingMs,
       locked: room.locked, remainingMs: room.remainingMs,
-      ...(player.id === room.hostId ? { admin: { forcedDice: room.forcedDice ? [...room.forcedDice] : null } } : {}),
+      ...(!this.persistence && player.id === room.hostId
+        ? { admin: { forcedDice: room.forcedDice ? [...room.forcedDice] : null } }
+        : {}),
       players: [...room.players.values()].map(entry => ({
-        id: entry.id, name: entry.name, avatarKey: entry.avatarKey, balance: entry.balance, connected: entry.connected,
+        id: entry.id, name: entry.name, avatarKey: entry.avatarKey, connected: entry.connected,
         betTotal: totalBets(entry.bets), eligible: entry.eligible,
+        ...(!this.persistence ? { balance: entry.balance } : {}),
       })),
       boardTotals, dice: room.phase === 'result' ? [...room.dice] : [],
       messages: room.messages ? [...room.messages] : [],
       history: structuredClone(room.history).map(round => {
         if (player.id !== room.hostId) delete round.demo;
+        if (this.persistence) {
+          round.results = round.results.map(({ balance: _privateBalance, ...result }) => result);
+        }
         return round;
       }),
       you: {
@@ -195,7 +201,7 @@ export class GameService {
 
         // Enforce the deadline even if the event loop has not run its timer yet.
         if (!room.paused && room.deadline && Date.now() >= room.deadline) {
-          if (room.phase === 'betting') this.shake(room);
+          if (room.phase === 'betting') await this.shake(room);
           else if (room.phase === 'result') await this.openRound(room);
           this.changed(room);
         }
@@ -245,12 +251,33 @@ export class GameService {
     requireCondition(!this.memberships.has(socketId), 'ALREADY_IN_ROOM', 'Hãy rời phòng hiện tại trước.');
     await this.cleanup();
     requireCondition(this.rooms.size < this.maxRooms, 'SERVER_FULL', 'Máy chủ đang đầy. Vui lòng thử lại sau.');
-    let code;
-    do {
-      code = Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[randomInt(32)]).join('');
-    } while (this.rooms.has(code));
     const player = await this.playerFor(payload.name, socketId, identity);
     const persistenceId = randomUUID();
+    let code = null;
+    for (let attempt = 0; attempt < 10 && !code; attempt += 1) {
+      const candidate = Array.from(
+        { length: 6 },
+        () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[randomInt(32)]
+      ).join('');
+      if (this.rooms.has(candidate)) continue;
+      if (this.persistence) {
+        try {
+          await this.persistence.createRoom({
+            roomId: persistenceId,
+            code: candidate,
+            name: `Phòng ${candidate}`,
+            hostUserId: player.userId,
+            capacity: CAPACITY,
+            bettingDurationSeconds: Math.round(this.bettingMs / 1000),
+          });
+        } catch (error) {
+          if (error?.code === 'ROOM_CODE_CONFLICT') continue;
+          throw error;
+        }
+      }
+      code = candidate;
+    }
+    requireCondition(code, 'ROOM_CODE_EXHAUSTED', 'Không thể cấp mã phòng mới. Vui lòng thử lại.');
     const room = {
       code, gameId: randomUUID(), hostId: player.id, players: new Map(), phase: 'waiting',
       persistenceId,
@@ -261,16 +288,6 @@ export class GameService {
       bettingMs: this.bettingMs,
       forcedDice: null, demoRound: false,
     };
-    if (this.persistence) {
-      await this.persistence.createRoom({
-        roomId: persistenceId,
-        code,
-        name: `Phòng ${code}`,
-        hostUserId: player.userId,
-        capacity: CAPACITY,
-        bettingDurationSeconds: Math.round(room.bettingMs / 1000),
-      });
-    }
     this.rooms.set(code, room);
     this.addPlayer(room, player);
     try {
@@ -369,12 +386,33 @@ export class GameService {
 
   async leave(room, player) {
     requireCondition(!this.hasUnsettledBet(room, player), 'UNSETTLED_BET', 'Hãy xóa cược hoặc chờ kết quả trước khi rời phòng.');
+    const remainingPlayers = [...room.players.values()].filter(entry => entry !== player);
+    const replacement = room.hostId === player.id
+      ? remainingPlayers.find(entry => entry.connected && !entry.pendingRemoval) ??
+        remainingPlayers.find(entry => !entry.pendingRemoval)
+      : null;
+    const shouldClose = remainingPlayers.length === 0 || (room.hostId === player.id && !replacement);
+
     if (this.persistence) {
-      await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
+      if (shouldClose) {
+        await this.persistence.closeRoom({
+          roomId: room.persistenceId,
+          reason: 'Room closed after the last active player left',
+        });
+      } else {
+        await this.persistence.leaveRoom({
+          roomId: room.persistenceId,
+          userId: player.userId,
+          newHostUserId: replacement?.userId ?? null,
+        });
+      }
+    }
+    if (shouldClose) {
+      this.deleteRoom(room);
+      return { ok: true, state: null };
     }
     this.removePlayer(room, player);
-    if (room.players.size === 0) this.deleteRoom(room);
-    else this.changed(room);
+    this.changed(room);
     return { ok: true, state: null };
   }
 
@@ -450,13 +488,14 @@ export class GameService {
     if (event.startsWith('host:')) {
       this.host(room, player);
       this.currentNumber(room, payload);
-      requireCondition(!this.persistence || ['host:kick', 'host:transfer'].includes(event),
+      requireCondition(!this.persistence || event === 'host:kick',
         'ADMIN_ONLY', 'Chức năng này đã được chuyển sang trang quản trị hệ thống.');
       await this.administer(room, player, event, payload);
       return;
     }
     if (event === 'round:open' || event === 'room:reset') {
       this.host(room, player);
+      requireCondition(!this.persistence || !this.autoStart || event !== 'round:open', 'ADMIN_ONLY', 'Ván được mở tự động bởi máy chủ.');
       requireCondition(!this.persistence || event !== 'room:reset',
         'ADMIN_ONLY', 'Reset dữ liệu phòng đã được chuyển sang quy trình quản trị có kiểm soát.');
       this.currentNumber(room, payload);
@@ -497,7 +536,8 @@ export class GameService {
       'BETTING_CLOSED', 'Đã hết thời gian cược hoặc phòng đang tạm dừng.');
     if (event === 'round:shake') {
       this.host(room, player);
-      this.shake(room);
+      requireCondition(!this.persistence || !this.autoStart, 'ADMIN_ONLY', 'Máy chủ tự khóa cược và lắc khi hết giờ.');
+      await this.shake(room);
       return;
     }
 
@@ -547,7 +587,7 @@ export class GameService {
     for (const player of [...room.players.values()]) {
       if (!player.pendingRemoval) continue;
       if (this.persistence) {
-        await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
+        if (!player.membershipAlreadyRemoved) await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
       }
       this.removePlayer(room, player);
     }
@@ -571,7 +611,7 @@ export class GameService {
       try {
         await this.withRoomOperation(room, async () => {
           if (this.rooms.get(room.code) !== room || room.roundId !== roundId || room.phase !== phase || room.paused) return;
-          if (phase === 'betting') this.shake(room);
+          if (phase === 'betting') await this.shake(room);
           else if (phase === 'result') await this.openRound(room);
           this.changed(room);
         });
@@ -591,6 +631,9 @@ export class GameService {
         roomId: room.persistenceId,
         roundId,
         roundNumber,
+        bettingDeadline: this.autoStart && !room.paused
+          ? new Date(Date.now() + room.bettingMs)
+          : null,
       });
     }
     room.phase = 'betting';
@@ -606,7 +649,13 @@ export class GameService {
     if (this.autoStart) this.schedulePhase(room, room.bettingMs);
   }
 
-  shake(room) {
+  async shake(room) {
+    if (this.persistence) {
+      await this.persistence.markRoundRevealing({
+        roomId: room.persistenceId,
+        roundId: room.roundId,
+      });
+    }
     this.clearPhaseTimer(room);
     room.phase = 'revealing';
     const roundId = room.roundId;
@@ -672,12 +721,37 @@ export class GameService {
       target.stats.highestBalance = Math.max(target.stats.highestBalance, target.balance);
     } else if (event === 'host:kick') {
       requireCondition(target.id !== host.id, 'INVALID_TARGET', 'Hãy dùng nút rời phòng để rời bàn.');
-      requireCondition(room.phase !== 'revealing', 'WRONG_PHASE', 'Chờ kết quả trước khi đuổi người chơi.');
+      requireCondition(!this.persistence || target.role !== 'admin', 'ADMIN_TARGET_FORBIDDEN', 'Host không được kick quản trị viên hệ thống.');
       const socketId = target.socketId;
+      if (this.persistence?.hostKickMember) {
+        const result = await this.persistence.hostKickMember({ actorId: host.userId, userId: target.userId,
+          roomId: room.persistenceId, roundId: room.roundId, requestId: payload.requestId });
+        target.balance = result.balance;
+        if (result.retainedBets) {
+          this.memberships.delete(socketId); this.sessions.delete(target.token);
+          target.connected = false; target.socketId = null; target.disconnectedAt = Date.now();
+          target.pendingRemoval = true; target.membershipAlreadyRemoved = true;
+        } else { target.bets = this.emptyBets(); this.removePlayer(room, target); }
+        if (socketId) this.onKick(socketId);
+        return;
+      }
+      if (room.phase === 'betting' && this.hasUnsettledBet(room, target)) {
+        if (this.persistence) {
+          const refund = await this.persistence.clearBets({
+            userId: target.userId,
+            roomId: room.persistenceId,
+            roundId: room.roundId,
+            requestId: `kick_refund:${payload.requestId}`,
+          });
+          target.balance = refund.balance;
+        } else {
+          target.balance += totalBets(target.bets);
+        }
+        target.bets = this.emptyBets();
+      }
       if (this.hasUnsettledBet(room, target)) {
-        // Revoke room access immediately, but keep the accepted stake in the
-        // round until settlement commits. Removing it here would erase the
-        // payout obligation or incorrectly refund a single player's bet.
+        // Once revealing starts, the accepted stake remains in the round and
+        // is settled even though room access is revoked immediately.
         this.memberships.delete(socketId);
         this.sessions.delete(target.token);
         target.connected = false;
@@ -724,8 +798,8 @@ export class GameService {
       pendingResults.push({ player, userId: player.userId, totalBet, totalReturn, profit });
     }
 
-    let persistedPlayers = new Map();
     let committedDice = dice;
+    let resolvedResults = pendingResults;
     if (this.persistence) {
       const settlement = await this.persistence.settleRound({
         roomId: room.persistenceId,
@@ -733,23 +807,29 @@ export class GameService {
         dice,
         playerResults: pendingResults.map(({ userId, totalBet, totalReturn }) => ({ userId, totalBet, totalReturn })),
       });
-      persistedPlayers = new Map(settlement.players.map(result => [result.userId, result]));
       committedDice = settlement.dice ?? dice;
+      resolvedResults = settlement.players.map(persisted => {
+        const player = [...room.players.values()].find(entry => entry.userId === persisted.userId);
+        requireCondition(player, 'DATABASE_CONFLICT', 'Kết quả database chứa người chơi không còn trong vòng.');
+        return {
+          player,
+          userId: persisted.userId,
+          totalBet: persisted.totalBet,
+          totalReturn: persisted.totalReturn,
+          profit: persisted.totalReturn - persisted.totalBet,
+          balance: persisted.balance,
+        };
+      });
     }
 
     room.demoRound = demoRound;
     room.forcedDice = null;
     const results = [];
-    for (const pending of pendingResults) {
+    for (const pending of resolvedResults) {
       const { player } = pending;
       let { totalBet, totalReturn, profit } = pending;
       if (this.persistence) {
-        const persisted = persistedPlayers.get(player.userId);
-        requireCondition(persisted, 'DATABASE_CONFLICT', 'Thiếu kết quả ví sau khi thanh toán vòng chơi.');
-        player.balance = persisted.balance;
-        totalBet = persisted.totalBet;
-        totalReturn = persisted.totalReturn;
-        profit = totalReturn - totalBet;
+        player.balance = pending.balance;
       } else {
         player.balance += totalReturn;
       }
@@ -831,10 +911,29 @@ export class GameService {
           return;
         }
         let removed = false;
-        for (const player of room.players.values()) {
+        for (const player of [...room.players.values()]) {
           if (!player.connected && now - player.disconnectedAt >= this.disconnectTtlMs && !this.hasUnsettledBet(room, player)) {
+            const remainingPlayers = [...room.players.values()].filter(entry => entry !== player);
+            const replacement = room.hostId === player.id
+              ? remainingPlayers.find(entry => entry.connected && !entry.pendingRemoval) ??
+                remainingPlayers.find(entry => !entry.pendingRemoval)
+              : null;
+            if (room.hostId === player.id && !replacement) {
+              if (this.persistence) {
+                await this.persistence.closeRoom({
+                  roomId: room.persistenceId,
+                  reason: 'Room closed after all reusable sessions expired',
+                });
+              }
+              this.deleteRoom(room);
+              return;
+            }
             if (this.persistence) {
-              await this.persistence.leaveRoom({ roomId: room.persistenceId, userId: player.userId });
+              await this.persistence.leaveRoom({
+                roomId: room.persistenceId,
+                userId: player.userId,
+                newHostUserId: replacement?.userId ?? null,
+              });
             }
             this.removePlayer(room, player);
             removed = true;
@@ -859,6 +958,128 @@ export class GameService {
       this.memberships.delete(player.socketId);
     }
     this.rooms.delete(room.code);
+  }
+
+  /**
+   * Reconcile an already-committed administrative database action with the
+   * in-memory timers/sockets. PostgreSQL remains authoritative; these helpers
+   * never write persistence themselves.
+   */
+  applyAdminRoomStatus(roomId, status) {
+    const room = [...this.rooms.values()].find(entry => entry.persistenceId === roomId);
+    if (!room) return false;
+    if (status === 'closed') {
+      for (const player of room.players.values()) {
+        if (player.socketId) this.onKick(player.socketId);
+      }
+      this.deleteRoom(room);
+      return true;
+    }
+    const paused = status === 'paused';
+    if (room.paused !== paused) {
+      const remaining = room.deadline ? Math.max(0, room.deadline - Date.now()) : room.remainingMs;
+      room.paused = paused;
+      const fallback = room.phase === 'betting' ? room.bettingMs : this.resultMs;
+      if (['betting', 'result'].includes(room.phase)) this.schedulePhase(room, remaining ?? fallback);
+      this.changed(room);
+    }
+    return true;
+  }
+
+  applyAdminUserRemoval(userId, roomId = null, removal = null) {
+    for (const room of this.rooms.values()) {
+      if (roomId && room.persistenceId !== roomId) continue;
+      const player = [...room.players.values()].find(entry => entry.userId === userId);
+      if (!player) continue;
+      if (removal?.roomClosed) {
+        this.applyAdminRoomStatus(room.persistenceId, 'closed');
+        return true;
+      }
+      const socketId = player.socketId;
+      if (totalBets(player.bets) > 0 && (room.phase === 'revealing' || (room.phase === 'betting' && removal?.refunded === 0))) {
+        this.memberships.delete(socketId);
+        this.sessions.delete(player.token);
+        player.connected = false;
+        player.socketId = null;
+        player.disconnectedAt = Date.now();
+        player.pendingRemoval = true;
+        player.membershipAlreadyRemoved = true;
+      } else {
+        player.bets = this.emptyBets();
+        this.removePlayer(room, player);
+      }
+      if (removal?.newHostId) room.hostId = [...room.players.values()].find(entry => entry.userId === removal.newHostId)?.id ?? room.hostId;
+      if (socketId) this.onKick(socketId);
+      if (room.players.size === 0) this.deleteRoom(room);
+      else this.changed(room);
+      return true;
+    }
+    return false;
+  }
+
+  applyAdminRoundOverride(roundId, dice) {
+    const room = [...this.rooms.values()].find(entry => entry.roundId === roundId);
+    if (!room) return false;
+    room.forcedDice = Array.isArray(dice) ? [...dice] : null;
+    this.changed(room);
+    return true;
+  }
+
+  applyAdminRoomLock(roomId, locked) {
+    const room = [...this.rooms.values()].find(entry => entry.persistenceId === roomId);
+    if (!room) return false;
+    room.locked = Boolean(locked);
+    this.changed(room);
+    return true;
+  }
+
+  applyAdminBettingDuration(roomId, durationSeconds) {
+    const room = [...this.rooms.values()].find(entry => entry.persistenceId === roomId);
+    if (!room) return false;
+    room.bettingMs = durationSeconds * 1000;
+    this.changed(room);
+    return true;
+  }
+
+  async applyAdminRoundCancellation(roundId) {
+    const room = [...this.rooms.values()].find(entry => entry.roundId === roundId);
+    if (!room) return false;
+    {
+      this.clearPhaseTimer(room);
+      clearTimeout(room.revealTimer);
+      room.revealTimer = null;
+      room.forcedDice = null;
+      room.dice = [];
+      for (const player of room.players.values()) {
+        player.bets = this.emptyBets();
+        player.lastResult = null;
+        player.requests.clear();
+        if (this.persistence) {
+          if (player.pendingRemoval) continue;
+          const profile = await this.persistence.getPlayerProfile(player.userId);
+          player.balance = profile.balance;
+        }
+      }
+      room.phase = 'waiting';
+      await this.removePendingPlayers(room);
+      room.roundId = null;
+      if (this.autoStart && !room.paused) await this.openRound(room);
+      this.changed(room);
+      return true;
+    }
+  }
+
+  async refreshPlayerProfile(userId) {
+    if (!this.persistence) return;
+    for (const room of this.rooms.values()) {
+      const player = [...room.players.values()].find(entry => entry.userId === userId);
+      if (!player || player.pendingRemoval) continue;
+      const profile = await this.persistence.getPlayerProfile(userId);
+      player.balance = profile.balance;
+      player.name = profile.displayName;
+      player.avatarKey = profile.avatarKey;
+      this.changed(room);
+    }
   }
 
   close() {

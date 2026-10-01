@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { UserRepository } from '../../src/repositories/UserRepository.js';
-import { WalletService, TRANSACTION_TYPES } from '../../src/services/WalletService.js';
+import { UserRepository } from '../../server/repositories/UserRepository.js';
+import { WalletService, TRANSACTION_TYPES } from '../../server/services/WalletService.js';
 
 describe('WalletService Test Suite (Ledger & Idempotency)', () => {
   const userRepo = new UserRepository();
@@ -114,5 +114,17 @@ describe('WalletService Test Suite (Ledger & Idempotency)', () => {
         actorId: testUser.id,
       });
     }, /requestId/);
+  });
+
+  test('Should reject a zero or negative admin grant before changing the wallet', async () => {
+    await assert.rejects(
+      () => WalletService.adminGrant({
+        userId: testUser.id,
+        amount: -1,
+        actorId: testUser.id,
+        requestId: 'invalid-negative-grant',
+      }),
+      /amount must be between/
+    );
   });
 });

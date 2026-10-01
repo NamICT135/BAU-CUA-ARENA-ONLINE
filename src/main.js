@@ -1,10 +1,11 @@
 import { io } from 'socket.io-client';
-import './style.css';
-import './arena.css';
-import { createBowlReveal } from './bowl.js';
-import { countSymbolAppearances, HISTORY_ROW_LIMIT, recentHistoryRounds } from './history.js';
-import { createHub } from './hub.js';
-import { createAuth } from './auth.js';
+import './styles/base.css';
+import './features/game/arena.css';
+import { createBowlReveal } from './features/game/bowl.js';
+import { countSymbolAppearances, HISTORY_ROW_LIMIT, recentHistoryRounds } from './features/game/history.js';
+import { createHub } from './features/hub/hub.js';
+import { createAuth } from './features/auth/auth.js';
+import { createAccountPanel } from './features/account/account.js';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
 const sessionKey = 'bau-cua-arena-session';
@@ -63,6 +64,23 @@ const backgroundMusic = ui['background-music'];
 // Hub and Auth module instances
 let hub = null;
 let auth = null;
+let currentAccount = null;
+
+function renderAccountState(user) {
+  const signedIn = Boolean(user);
+  for (const id of ['hub-auth-register', 'hub-auth-login', 'hub-auth-forgot']) {
+    if (ui[id]) ui[id].hidden = signedIn;
+  }
+  if (ui['hub-auth-account']) ui['hub-auth-account'].hidden = !signedIn;
+  if (ui['hub-auth-account-name']) ui['hub-auth-account-name'].textContent = user?.displayName || '';
+  if (ui['hub-auth-admin']) ui['hub-auth-admin'].hidden = user?.role !== 'admin';
+}
+
+function connectForAccount() {
+  if (!currentAccount || !config || socket.connected || socket.active) return;
+  sessionReplaced = false;
+  socket.connect();
+}
 
 if (backgroundMusic) {
   backgroundMusic.volume = 0.6;
@@ -387,6 +405,14 @@ function renderControls() {
   }
   const canReset = betweenRounds || (room.phase === 'betting' && Object.values(room.boardTotals).every(value => value === 0));
   if (ui['reset-room']) ui['reset-room'].disabled = !available || !isHost || !canReset;
+  const persistent = config?.balanceMode === 'available';
+  for (const id of ['open-round', 'shake', 'pause-room', 'lock-room', 'cancel-round', 'grant-amount', 'grant-coins', 'transfer-host', 'reset-room']) {
+    if (persistent && ui[id]) ui[id].hidden = true;
+  }
+  for (const selector of ['.admin-duration-control', '.demo-dice-box']) {
+    const control = ui['host-panel']?.querySelector(selector);
+    if (control) control.hidden = persistent;
+  }
   if (ui['leave-room']) ui['leave-room'].disabled = !available;
 }
 
@@ -545,6 +571,8 @@ function applyState(next) {
   ui['player-display-name'].textContent = you?.name || 'Ngọc Anh';
   const profileWrap = document.querySelector('.user-profile .profile-avatar-wrap');
   if (profileWrap) profileWrap.dataset.playerId = room.you.id;
+  const profileImage = profileWrap?.querySelector('img');
+  if (profileImage) profileImage.src = `/assets/arena/symbol-${['bau', 'cua', 'tom', 'ca', 'ga', 'nai'].includes(room.you.avatarKey) ? room.you.avatarKey : 'ga'}.png`;
   ui['round-number'].textContent = `PHIÊN #${room.roundNumber || 158326}`;
 
   const phaseNames = {
@@ -635,8 +663,11 @@ function renderPlayers() {
     id: p.id,
     name: p.name,
     vip: Math.max(1, 8 - idx),
-    balance: config?.balanceMode === 'available' ? p.balance : Math.max(0, p.balance - (p.betTotal || 0)),
-    avatar: `/assets/arena/symbol-${['ca', 'cua', 'ga', 'nai', 'tom', 'bau'][idx % 6]}.png`,
+    balance: Number.isSafeInteger(p.balance)
+      ? (config?.balanceMode === 'available' ? p.balance : Math.max(0, p.balance - (p.betTotal || 0)))
+      : null,
+    betTotal: p.betTotal || 0,
+    avatar: `/assets/arena/symbol-${['bau', 'cua', 'tom', 'ca', 'ga', 'nai'].includes(p.avatarKey) ? p.avatarKey : ['ca', 'cua', 'ga', 'nai', 'tom', 'bau'][idx % 6]}.png`,
     isMe: p.id === room.you.id,
     connected: p.connected,
   }));
@@ -688,7 +719,10 @@ function renderPlayers() {
     const nameSpan = element('span', 'vip-player-name', player.name + (player.isMe ? ' (bạn)' : ''));
     meta.append(levelTag, nameSpan);
 
-    const coinSpan = element('span', 'vip-player-coin', formatCompactCoins(player.balance));
+    const coinText = player.balance === null
+      ? `Cược ${formatCompactCoins(player.betTotal)}`
+      : formatCompactCoins(player.balance);
+    const coinSpan = element('span', 'vip-player-coin', coinText);
 
     row.append(avatarWrap, meta, coinSpan);
     return row;
@@ -1200,6 +1234,11 @@ function clearRoom(message) {
 }
 
 async function enterRoom(event, nameOverride, codeOverride) {
+  if (!currentAccount) {
+    auth?.openAuth('login', ui['player-name']?.value?.trim() || '');
+    notice('Bạn cần đăng nhập để tạo hoặc vào phòng.', true);
+    return;
+  }
   if (!config || busy || acceptingMembership || !socket.connected || sessionReplaced) return;
   // Support name/code from hub cards (override lobby form values)
   const name = nameOverride ?? ui['player-name'].value.trim();
@@ -1243,7 +1282,7 @@ async function resumeRoom(epoch) {
   renderControls();
   notice('Đang khôi phục phòng…');
   try {
-    const reply = await send('room:resume', { token: savedSession.token });
+    const reply = await send('room:resume', { token: savedSession?.token });
     if (epoch !== connectionEpoch) return;
     rememberSession(reply.session);
     synced = true;
@@ -1260,7 +1299,7 @@ socket.on('connect', async () => {
   const epoch = ++connectionEpoch;
   busy = false;
   connectionStatus('Đã kết nối', 'connected');
-  if (savedSession) await resumeRoom(epoch);
+  if (savedSession || currentAccount) await resumeRoom(epoch);
   else {
     synced = false;
     renderControls();
@@ -1275,11 +1314,18 @@ socket.on('connect', async () => {
   }
 });
 
-socket.on('connect_error', () => {
+socket.on('connect_error', error => {
   busy = false;
   acceptingMembership = false;
   renderControls();
-  notice('Không thể kết nối máy chủ. Nếu đang dùng điện thoại, hãy mở bằng địa chỉ mạng nội bộ và khởi động lại server.', true);
+  if (error?.message === 'AUTH_REQUIRED') {
+    currentAccount = null;
+    renderAccountState(null);
+    notice('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', true);
+    auth?.openAuth('login', ui['player-name']?.value?.trim() || '');
+  } else {
+    notice('Không thể kết nối máy chủ. Nếu đang dùng điện thoại, hãy mở bằng địa chỉ mạng nội bộ và khởi động lại server.', true);
+  }
 });
 
 socket.on('disconnect', () => {
@@ -1359,6 +1405,20 @@ if (playerChip) {
   ui[buttonId]?.addEventListener('click', () => {
     auth?.openAuth(initialView, ui['player-name']?.value?.trim() || '');
   });
+});
+
+ui['hub-auth-logout']?.addEventListener('click', async () => {
+  try {
+    await auth?.logout();
+  } catch (error) {
+    notice(error.message || 'Không thể đăng xuất.', true);
+    return;
+  }
+  currentAccount = null;
+  socket.disconnect();
+  clearRoom('Bạn đã đăng xuất.');
+  renderAccountState(null);
+  auth?.openAuth('login');
 });
 
 ui['join-room'].addEventListener('click', () => enterRoom('room:join'));
@@ -1909,7 +1969,7 @@ async function loadConfig() {
     configAttempts = 0;
     symbols = new Map(config.symbols.map(s => [s.id, s]));
     buildBoard();
-    socket.connect();
+    connectForAccount();
   } catch (err) {
     configAttempts += 1;
     const retryDelay = Math.min(5000, 700 * (2 ** Math.min(configAttempts - 1, 3)));
@@ -1928,11 +1988,16 @@ async function initialize() {
 
   // Initialize auth module controller
   auth = createAuth({
-    onAuthenticated: ({ displayName }) => {
+    onAuthenticated: ({ displayName, user }) => {
+      const previousUserId = currentAccount?.id;
+      currentAccount = user;
+      if (previousUserId && previousUserId !== user?.id) forgetSession();
       if (ui['player-name']) ui['player-name'].value = displayName;
       rememberPlayerName(displayName);
+      renderAccountState(user);
       ui.home.hidden = true;
       if (hub) hub.showHub(displayName);
+      connectForAccount();
     }
   });
 
@@ -1946,8 +2011,14 @@ async function initialize() {
 
   // The product now opens directly in the game hub. Keep the former entry form
   // in the DOM for room/session compatibility, but never present it as a gate.
-  const playerName = directPlayerName();
+  currentAccount = await auth.restoreSession();
+  createAccountPanel({ auth,
+    onProfile: user => { currentAccount = user; renderAccountState(user); if (ui['player-name']) ui['player-name'].value = user.displayName; },
+    onSignedOut: () => { currentAccount = null; socket.disconnect(); clearRoom('Phiên đã được thu hồi. Hãy đăng nhập lại.'); renderAccountState(null); auth.openAuth('login'); },
+  });
+  const playerName = currentAccount?.displayName || directPlayerName();
   if (ui['player-name']) ui['player-name'].value = playerName;
+  renderAccountState(currentAccount);
   ui.home.hidden = true;
   hub.showHub(playerName);
 

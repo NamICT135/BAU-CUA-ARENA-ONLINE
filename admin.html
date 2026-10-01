@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="description" content="Bảng điều hành quản trị Bầu Cua Victory." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/src/features/admin/admin.css" />
+  <title>Quản trị hệ thống · Bầu Cua Victory</title>
+</head>
+<body>
+  <a class="skip-link" href="#admin-content">Bỏ qua điều hướng</a>
+
+  <svg class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="icon-room" viewBox="0 0 24 24"><path d="M3 8.5 12 3l9 5.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M8 21v-8h8v8M8 9h.01M16 9h.01"/></symbol>
+    <symbol id="icon-dice" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></symbol>
+    <symbol id="icon-log" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-15.5-3L3 11"/><path d="M3 4v7h7M4 13a8.1 8.1 0 0 0 15.5 3l1.5-3"/><path d="M21 20v-7h-7"/></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  </svg>
+
+  <main id="session-gate" class="session-gate" aria-labelledby="gate-title">
+    <section class="login-card">
+      <div class="brand-mark" aria-hidden="true"><svg><use href="#icon-shield"></use></svg></div>
+      <p class="eyebrow">Khu vực được bảo vệ</p>
+      <h1 id="gate-title">Quản trị Bầu Cua</h1>
+      <p id="gate-description" class="muted">Đang kiểm tra phiên đăng nhập…</p>
+
+      <div id="gate-loading" class="gate-loading" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Đang xác thực</span>
+      </div>
+
+      <form id="login-form" class="login-form" hidden novalidate>
+        <div class="field">
+          <label for="login-username">Tên đăng nhập hoặc email</label>
+          <input id="login-username" name="username" type="text" autocomplete="username" maxlength="254" required />
+        </div>
+        <div class="field">
+          <label for="login-password">Mật khẩu</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <p id="login-error" class="form-error" role="alert" aria-live="assertive"></p>
+        <button class="button button--primary button--full" type="submit">Đăng nhập quản trị</button>
+      </form>
+
+      <div id="access-denied" class="access-denied" hidden>
+        <p class="alert alert--danger" role="alert">Tài khoản hiện tại không có quyền quản trị hệ thống.</p>
+        <div class="gate-actions">
+          <button id="retry-account" class="button button--secondary" type="button">Dùng tài khoản khác</button>
+          <a class="button button--ghost" href="/">Về trang chơi</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="admin-app" class="admin-shell" hidden>
+    <aside id="sidebar" class="sidebar" aria-label="Điều hướng quản trị">
+      <div class="sidebar-brand">
+        <div class="brand-mark brand-mark--small" aria-hidden="true"><svg><use href="#icon-shield"></use></svg></div>
+        <div><strong>Bầu Cua</strong><span>Điều hành hệ thống</span></div>
+      </div>
+      <nav class="admin-nav">
+        <button class="nav-item is-active" type="button" data-view="overview" aria-current="page">
+          <svg aria-hidden="true"><use href="#icon-grid"></use></svg><span>Tổng quan</span>
+        </button>
+        <button class="nav-item" type="button" data-view="users">
+          <svg aria-hidden="true"><use href="#icon-users"></use></svg><span>Người chơi</span>
+        </button>
+        <button class="nav-item" type="button" data-view="rooms">
+          <svg aria-hidden="true"><use href="#icon-room"></use></svg><span>Phòng chơi</span>
+        </button>
+        <button class="nav-item" type="button" data-view="override">
+          <svg aria-hidden="true"><use href="#icon-dice"></use></svg><span>Kết quả ván</span>
+        </button>
+        <button class="nav-item" type="button" data-view="audit">
+          <svg aria-hidden="true"><use href="#icon-log"></use></svg><span>Nhật ký</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <a class="button button--ghost button--full" href="/">Mở trang chơi</a>
+        <button id="logout-button" class="button button--subtle button--full" type="button">Đăng xuất</button>
+      </div>
+    </aside>
+
+    <div id="sidebar-scrim" class="sidebar-scrim" hidden></div>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button id="menu-button" class="icon-button menu-button" type="button" aria-label="Mở điều hướng" aria-controls="sidebar" aria-expanded="false">
+          <svg aria-hidden="true"><use href="#icon-menu"></use></svg>
+        </button>
+        <div class="topbar-heading">
+          <p class="eyebrow">Bảng điều hành</p>
+          <h1 id="page-title">Tổng quan</h1>
+        </div>
+        <div class="topbar-account">
+          <span id="admin-avatar" class="account-avatar" aria-hidden="true">A</span>
+          <span class="account-copy"><strong id="admin-name">Quản trị viên</strong><small id="admin-username">—</small></span>
+        </div>
+      </header>
+
+      <div id="connection-status" class="connection-status" role="status" aria-live="polite"></div>
+
+      <main id="admin-content" class="content" tabindex="-1">
+        <section id="view-overview" class="view is-active" data-section="overview" aria-labelledby="overview-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">Trạng thái hệ thống</p><h2 id="overview-title">Tổng quan vận hành</h2><p id="overview-updated" class="muted">Chưa cập nhật</p></div>
+            <button class="button button--secondary" type="button" data-refresh="overview"><svg aria-hidden="true"><use href="#icon-refresh"></use></svg>Làm mới</button>
+          </div>
+          <div id="overview-error" class="inline-state inline-state--error" role="alert" hidden></div>
+          <div id="overview-loading" class="loading-panel" role="status"><span class="spinner" aria-hidden="true"></span>Đang tải số liệu…</div>
+          <div id="overview-metrics" class="metric-grid" hidden></div>
+          <section class="panel overview-detail">
+            <div class="panel-heading"><div><h3>Tình hình gần đây</h3><p class="muted">Dữ liệu tổng hợp từ máy chủ và cơ sở dữ liệu.</p></div></div>
+            <div id="overview-details" class="detail-grid"></div>
+          </section>
+        </section>
+
+        <section id="view-users" class="view" data-section="users" aria-labelledby="users-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">Tài khoản và ví</p><h2 id="users-title">Quản lý người chơi</h2><p class="muted">Tra cứu bằng ID, tên đăng nhập, tên hiển thị hoặc email.</p></div>
+            <button class="button button--secondary" type="button" data-refresh="users"><svg aria-hidden="true"><use href="#icon-refresh"></use></svg>Làm mới</button>
+          </div>
+          <form id="user-search-form" class="toolbar panel" role="search">
+            <div class="field field--grow"><label for="user-search">Tìm người chơi</label><input id="user-search" name="search" type="search" placeholder="Nhập ID, tên hoặc email" autocomplete="off" /></div>
+            <div class="field"><label for="user-status-filter">Trạng thái</label><select id="user-status-filter" name="status"><option value="">Tất cả</option><option value="active">Đang hoạt động</option><option value="banned">Đã khóa</option><option value="deleted">Đã xóa mềm</option></select></div>
+            <button class="button button--primary toolbar-submit" type="submit">Tìm kiếm</button>
+          </form>
+          <div id="users-error" class="inline-state inline-state--error" role="alert" hidden></div>
+          <div class="split-layout">
+            <section class="panel table-panel" aria-label="Danh sách người chơi">
+              <div id="users-loading" class="loading-panel" role="status"><span class="spinner" aria-hidden="true"></span>Đang tải người chơi…</div>
+              <div class="table-scroll">
+                <table id="users-table" hidden><thead><tr><th>Người chơi</th><th>Trạng thái</th><th>Vai trò</th><th class="numeric">Số dư</th><th>Tham gia</th><th><span class="sr-only">Thao tác</span></th></tr></thead><tbody id="users-body"></tbody></table>
+              </div>
+              <p id="users-empty" class="empty-state" hidden>Không tìm thấy người chơi phù hợp.</p>
+              <div class="pagination"><button id="users-prev" class="button button--subtle" type="button">Trang trước</button><span id="users-page">Trang 1</span><button id="users-next" class="button button--subtle" type="button">Trang sau</button></div>
+            </section>
+            <aside id="user-detail" class="panel detail-panel" aria-labelledby="user-detail-title">
+              <div id="user-detail-empty" class="empty-state"><svg aria-hidden="true"><use href="#icon-users"></use></svg><p>Chọn một người chơi để xem hồ sơ và thực hiện thao tác quản trị.</p></div>
+              <div id="user-detail-content" hidden>
+                <div class="panel-heading"><div><p class="eyebrow">Hồ sơ người chơi</p><h3 id="user-detail-title">Chi tiết tài khoản</h3></div><button id="close-user-detail" class="icon-button detail-close" type="button" aria-label="Đóng chi tiết"><svg aria-hidden="true"><use href="#icon-close"></use></svg></button></div>
+                <div id="user-profile-summary" class="profile-summary"></div>
+                <div id="pending-bets" class="compact-list"></div>
+                <div class="admin-actions">
+                  <form id="grant-form" class="action-form">
+                    <h4>Cấp xu</h4>
+                    <div class="field"><label for="grant-amount">Số xu</label><input id="grant-amount" name="amount" type="number" min="1" step="1" inputmode="numeric" required /></div>
+                    <div class="field"><label for="grant-reason">Lý do</label><textarea id="grant-reason" name="reason" rows="2" minlength="3" maxlength="255" required></textarea></div>
+                    <button class="button button--primary button--full" type="submit">Xác nhận cấp xu</button>
+                  </form>
+                  <form id="ban-form" class="action-form">
+                    <h4>Khóa tài khoản</h4>
+                    <div class="field"><label for="ban-reason">Lý do</label><textarea id="ban-reason" name="reason" rows="2" minlength="3" maxlength="255" required></textarea></div>
+                    <div class="field"><label for="ban-until">Khóa đến (để trống nếu vĩnh viễn)</label><input id="ban-until" name="bannedUntil" type="datetime-local" /></div>
+                    <button class="button button--warning button--full" type="submit">Khóa tài khoản</button>
+                  </form>
+                  <form id="unban-form" class="action-form" hidden>
+                    <h4>Gỡ khóa</h4>
+                    <div class="field"><label for="unban-reason">Lý do</label><textarea id="unban-reason" name="reason" rows="2" minlength="3" maxlength="255" required></textarea></div>
+                    <button class="button button--success button--full" type="submit">Gỡ khóa tài khoản</button>
+                  </form>
+                  <form id="delete-user-form" class="action-form action-form--danger">
+                    <h4>Xóa mềm tài khoản</h4>
+                    <p class="muted">Phiên đăng nhập sẽ bị thu hồi; dữ liệu giao dịch vẫn được giữ để đối soát.</p>
+                    <div class="field"><label for="delete-user-reason">Lý do</label><textarea id="delete-user-reason" name="reason" rows="2" minlength="3" maxlength="255" required></textarea></div>
+                    <button class="button button--danger button--full" type="submit">Xóa mềm tài khoản</button>
+                  </form>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="view-rooms" class="view" data-section="rooms" aria-labelledby="rooms-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">Điều hành thời gian thực</p><h2 id="rooms-title">Phòng chơi</h2><p class="muted">Tạm dừng, tiếp tục, đóng phòng hoặc đưa thành viên ra khỏi phòng.</p></div>
+            <button class="button button--secondary" type="button" data-refresh="rooms"><svg aria-hidden="true"><use href="#icon-refresh"></use></svg>Làm mới</button>
+          </div>
+          <div id="rooms-error" class="inline-state inline-state--error" role="alert" hidden></div>
+          <div id="rooms-loading" class="loading-panel" role="status"><span class="spinner" aria-hidden="true"></span>Đang tải danh sách phòng…</div>
+          <div id="rooms-list" class="room-grid" hidden></div>
+          <p id="rooms-empty" class="empty-state panel" hidden>Hiện không có phòng nào trong hệ thống.</p>
+        </section>
+
+        <section id="view-override" class="view" data-section="override" aria-labelledby="override-title" hidden>
+          <div class="section-heading"><div><p class="eyebrow">Điều phối ván hiện tại</p><h2 id="override-title">Thiết lập kết quả</h2><p class="muted">Chỉ áp dụng khi kết quả cuối cùng của ván chưa được chốt.</p></div><button type="button" class="button button--secondary" data-refresh="override">Làm mới phòng và ván</button></div>
+          <div id="override-error" class="inline-state inline-state--error" role="alert" hidden></div>
+          <div id="override-loading" class="loading-panel" role="status" hidden>Đang tải các ván chưa chốt…</div>
+          <div class="form-layout">
+            <form id="override-form" class="panel operation-form">
+              <div class="alert alert--warning"><strong>Lưu ý:</strong> thao tác này được ghi đầy đủ vào nhật ký quản trị và chỉ có hiệu lực cho đúng ván được chọn.</div>
+              <div class="field"><label for="override-room">Phòng</label><select id="override-room" name="roomId" required><option value="">Chọn phòng đang chạy</option></select></div>
+              <div class="field"><label for="override-round">ID ván hiện tại</label><input id="override-round" name="roundId" type="text" autocomplete="off" required aria-describedby="override-round-hint" /><small id="override-round-hint">ID phải khớp chính xác để tránh sửa nhầm ván.</small></div>
+              <fieldset id="dice-fields" class="dice-fieldset"><legend>Kết quả ba xúc xắc</legend><div class="dice-grid">
+                <div class="field"><label for="override-die-1">Xúc xắc 1</label><select id="override-die-1" required></select></div>
+                <div class="field"><label for="override-die-2">Xúc xắc 2</label><select id="override-die-2" required></select></div>
+                <div class="field"><label for="override-die-3">Xúc xắc 3</label><select id="override-die-3" required></select></div>
+              </div></fieldset>
+              <label class="check-row"><input id="override-random" type="checkbox" /><span><strong>Trả ván về kết quả ngẫu nhiên</strong><small>Gửi kết quả rỗng và bỏ lựa chọn xúc xắc đã đặt trước.</small></span></label>
+              <div class="field"><label for="override-reason">Lý do điều chỉnh</label><textarea id="override-reason" name="reason" rows="3" minlength="3" maxlength="255" required></textarea></div>
+              <button class="button button--warning button--full" type="submit">Áp dụng cho ván này</button>
+            </form>
+            <aside class="panel guidance-panel"><h3>Điều kiện áp dụng</h3><ul><li>Phòng và ván phải còn tồn tại.</li><li><code>roundId</code> phải là ván hiện tại của phòng.</li><li>Kết quả cuối cùng chưa được máy chủ chốt.</li><li>Mọi thay đổi đều có mã lệnh chống lặp.</li></ul><p id="selected-room-summary" class="selected-room-summary muted">Chưa chọn phòng.</p></aside>
+          </div>
+        </section>
+
+        <section id="view-audit" class="view" data-section="audit" aria-labelledby="audit-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">Truy vết thay đổi</p><h2 id="audit-title">Nhật ký quản trị</h2><p class="muted">Theo dõi ai đã làm gì, vào lúc nào và trên đối tượng nào.</p></div>
+            <button class="button button--secondary" type="button" data-refresh="audit"><svg aria-hidden="true"><use href="#icon-refresh"></use></svg>Làm mới</button>
+          </div>
+          <form id="audit-filter-form" class="toolbar panel">
+            <div class="field field--grow"><label for="audit-action">Lọc theo hành động</label><input id="audit-action" name="action" type="search" placeholder="Ví dụ: grant_coins, ban_user" autocomplete="off" /></div>
+            <button class="button button--primary toolbar-submit" type="submit">Áp dụng</button>
+          </form>
+          <div id="audit-error" class="inline-state inline-state--error" role="alert" hidden></div>
+          <section class="panel table-panel">
+            <div id="audit-loading" class="loading-panel" role="status"><span class="spinner" aria-hidden="true"></span>Đang tải nhật ký…</div>
+            <div class="table-scroll"><table id="audit-table" hidden><thead><tr><th>Thời gian</th><th>Quản trị viên</th><th>Hành động</th><th>Đối tượng</th><th>Lý do</th></tr></thead><tbody id="audit-body"></tbody></table></div>
+            <p id="audit-empty" class="empty-state" hidden>Chưa có bản ghi phù hợp.</p>
+            <div class="pagination"><button id="audit-prev" class="button button--subtle" type="button">Trang trước</button><span id="audit-page">Trang 1</span><button id="audit-next" class="button button--subtle" type="button">Trang sau</button></div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog" class="confirm-card" novalidate>
+      <div class="confirm-icon" aria-hidden="true">!</div>
+      <h2 id="confirm-title">Xác nhận thao tác</h2>
+      <p id="confirm-message"></p>
+      <div id="confirm-reason-field" class="field confirm-reason" hidden>
+        <label for="confirm-reason">Lý do thao tác *</label>
+        <textarea id="confirm-reason" rows="3" minlength="3" maxlength="255" aria-describedby="confirm-reason-help confirm-reason-error"></textarea>
+        <small id="confirm-reason-help" class="muted">Từ 3 đến 255 ký tự. Lý do sẽ được lưu trong nhật ký quản trị.</small>
+        <small id="confirm-reason-error" class="form-error" role="alert"></small>
+      </div>
+      <div class="dialog-actions"><button class="button button--subtle" value="cancel">Hủy</button><button id="confirm-accept" class="button button--danger" value="confirm">Xác nhận</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script type="module" src="/src/features/admin/admin.js"></script>
+</body>
+</html>

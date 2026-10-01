@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { GameService } from '../../server/game.js';
-import { query } from '../../src/db/connection.js';
-import { GamePersistenceService } from '../../src/services/GamePersistenceService.js';
+import { query } from '../../server/db/connection.js';
+import { GamePersistenceService } from '../../server/services/GamePersistenceService.js';
 
-const config = JSON.parse(await readFile(new URL('../../game-config.json', import.meta.url), 'utf8'));
+const config = JSON.parse(await readFile(new URL('../../config/game-config.json', import.meta.url), 'utf8'));
 
 async function accepted(game, socketId, event, payload, identity) {
   const reply = await game.handle(socketId, event, payload, identity);
@@ -32,6 +32,7 @@ async function removeAccountFixture(userId) {
   await query('DELETE FROM processed_commands WHERE user_id = $1', [userId]);
   await query('DELETE FROM rooms WHERE host_id = $1', [userId]);
   await query('DELETE FROM wallet_transactions WHERE user_id = $1', [userId]);
+  await query('DELETE FROM wallets WHERE user_id = $1', [userId]);
   await query('DELETE FROM users WHERE id = $1', [userId]);
 }
 
@@ -65,9 +66,10 @@ test('Part B persists a complete GameService bet and settlement in PostgreSQL', 
     gameId: created.state.gameId,
     roundNumber: 0,
   }, identity);
+  const longRequestId = 'b'.repeat(100);
 
   const placed = await accepted(game, 'part-b-socket', 'bet:add', {
-    requestId: 'part-b-bet-1',
+    requestId: longRequestId,
     roundId: opened.state.roundId,
     symbol: 'cua',
     amount: 10_000,
@@ -85,7 +87,7 @@ test('Part B persists a complete GameService bet and settlement in PostgreSQL', 
   assert.equal(secondBet.state.you.bets.tom, 5_000);
 
   const duplicate = await accepted(game, 'part-b-socket', 'bet:add', {
-    requestId: 'part-b-bet-1',
+    requestId: longRequestId,
     roundId: opened.state.roundId,
     symbol: 'cua',
     amount: 10_000,
@@ -93,6 +95,14 @@ test('Part B persists a complete GameService bet and settlement in PostgreSQL', 
   assert.equal(duplicate.state.you.balance, config.initialBalance - 15_000);
   assert.equal(duplicate.state.you.bets.cua, 10_000);
   assert.equal(duplicate.state.you.bets.tom, 5_000);
+
+  await assert.rejects(
+    () => persistence.leaveRoom({
+      roomId: game.rooms.get(created.state.code).persistenceId,
+      userId,
+    }),
+    error => error?.code === 'UNSETTLED_BET'
+  );
 
   const persistedBet = await query(
     `SELECT COUNT(*)::int AS count, COALESCE(SUM(amount), 0) AS total
@@ -137,16 +147,24 @@ test('Part B persists a complete GameService bet and settlement in PostgreSQL', 
   });
 
   const betStatuses = await query(
-    `SELECT symbol, status
+    `SELECT symbol, status, payout
      FROM bets
      WHERE round_id = $1 AND user_id = $2
      ORDER BY symbol`,
     [opened.state.roundId, userId]
   );
   assert.deepEqual(
-    betStatuses.rows.map(row => [row.symbol, row.status]),
-    [['cua', 'won'], ['tom', 'lost']]
+    betStatuses.rows.map(row => [row.symbol, row.status, Number(row.payout)]),
+    [['cua', 'won', 20_000], ['tom', 'lost', 0]]
   );
+
+  const persistedRound = await query(
+    'SELECT dice, final_result, result_mode FROM rounds WHERE id = $1',
+    [opened.state.roundId]
+  );
+  assert.deepEqual(persistedRound.rows[0].dice, dice);
+  assert.deepEqual(persistedRound.rows[0].final_result, dice);
+  assert.equal(persistedRound.rows[0].result_mode, 'random');
 
   const ledger = await query(
     `SELECT transaction_type, amount
@@ -159,4 +177,24 @@ test('Part B persists a complete GameService bet and settlement in PostgreSQL', 
     ledger.rows.map(row => [row.transaction_type, Number(row.amount)]),
     [['BET_DEBIT', -10_000], ['BET_DEBIT', -5_000], ['ROUND_PAYOUT', 20_000]]
   );
+
+  const losingRoundId = randomUUID();
+  const persistedRoomId = game.rooms.get(created.state.code).persistenceId;
+  await persistence.createRound({ roomId: persistedRoomId, roundId: losingRoundId, roundNumber: 2 });
+  await persistence.placeBet({
+    userId,
+    roomId: persistedRoomId,
+    roundId: losingRoundId,
+    symbol: 'nai',
+    amount: 10_000,
+    requestId: 'highest-balance-loss',
+  });
+  await persistence.settleRound({
+    roomId: persistedRoomId,
+    roundId: losingRoundId,
+    dice: ['cua', 'bau', 'ga'],
+  });
+  const profileAfterLoss = await persistence.getPlayerProfile(userId);
+  assert.equal(profileAfterLoss.balance, config.initialBalance - 5_000);
+  assert.equal(profileAfterLoss.stats.highestBalance, config.initialBalance + 5_000);
 });

@@ -1,0 +1,4 @@
+ALTER TABLE admin_mfa_credentials
+  ADD COLUMN IF NOT EXISTS last_verified_counter BIGINT,
+  ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS blocked_until TIMESTAMPTZ;

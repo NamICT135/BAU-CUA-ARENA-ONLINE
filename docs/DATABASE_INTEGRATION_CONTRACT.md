@@ -41,7 +41,7 @@ The server must never directly trust a `userId`, role, or balance supplied by th
 ## Proposed Data Interfaces
 
 ```js
-getOrCreateProfile(userId)
+getPlayerProfile(userId)
 
 getWallet(userId)
 
@@ -49,15 +49,22 @@ placeBet({
   userId,
   roomId,
   roundId,
-  bets,
+  symbol,
+  amount,
+  requestId,
+})
+
+clearBets({
+  userId,
+  roomId,
+  roundId,
   requestId,
 })
 
 settleRound({
   roomId,
   roundId,
-  result,
-  playerResults,
+  dice,
 })
 
 getPlayerHistory({
@@ -178,13 +185,16 @@ The following integration points have been implemented:
 - When persistence is enabled, room creation and joining retrieve the display name, avatar, and balance from the account. The client cannot provide a trusted `userId` or balance.
 - `GamePersistenceService.placeBet()` saves the bet, deducts the wallet balance, writes the ledger entry, and records the processed command within one transaction.
 - `GamePersistenceService.clearBets()` refunds bets and writes the corresponding ledger entries within one transaction.
-- `GamePersistenceService.settleRound()` locks the round and wallets, records payouts, saves player results, and stores the final dice within one transaction.
+- `GamePersistenceService.settleRound()` locks the round, reads the accepted bets back from PostgreSQL as the authoritative stake set, locks wallets in user-id order, records per-bet payouts, saves player results, and commits `final_result` within one transaction.
 - Legacy Host economy and administration commands are rejected in persistent mode. Kick and Host transfer operations remain available.
-- Kicking a player immediately revokes room access but preserves accepted bets for settlement. The membership is closed only after the payout transaction has been committed.
+- Kicking during betting refunds accepted stakes before membership closes. Kicking during revealing revokes access immediately but preserves accepted bets until payout commits.
 - Data APIs use `authenticateHttp(req)` and obtain `userId` only from the server-side identity. These APIs include `/api/me`, `/api/me/wallet`, `/api/me/wallet/transactions`, `/api/me/history`, `/api/me/stats`, room history, and symbol statistics.
-- `tests/database-game-integration.test.js` verifies authentication requirements, database-before-RAM ordering, and that failed transactions do not broadcast state changes.
+- `tests/server/database-game-integration.test.js` verifies authentication requirements, database-before-RAM ordering, and that failed transactions do not broadcast state changes.
 
-Persistent mode is enabled only when the server receives both `persistence` and `authenticateSocket`.
+Persistent mode is enabled only through `createPersistentGameServer()` and requires
+`authenticateSocket`, `authorizeSocketCommand`, and `authenticateHttp`. The default
+`server/index.js` entry point remains RAM-only until the login module supplies all three;
+there is no fallback that trusts client identity.
 
 The login module must provide a session-authentication adapter that returns:
 
@@ -241,18 +251,19 @@ The following items do not depend on the user interface or on how the login modu
 - Retrying the same `requestId` does not deduct money twice and returns the current balance instead of an outdated balance stored in the original response payload.
 - Asynchronous operations within the same room are processed sequentially. Shake and settlement operations cannot overlap with a bet that is still waiting for the database.
 - Two concurrent settlement requests update payouts, statistics, and room history only once.
+- A bet whose database commit succeeded but whose RAM update/acknowledgment was interrupted is still included when settlement reads the authoritative bet rows.
 - The `bets.status` value is stored separately for each winning or losing symbol. All bets are not marked as won merely because the player received a payout.
 - Mock integration tests verify database-before-RAM ordering, rollback, recovery, and concurrency.
 - Mock integration tests verify account-based resume, settlement after kick, HTTP data APIs that reject client-supplied `userId` values, and socket sessions that can be revoked after connection.
 - PostgreSQL integration tests cover the complete flow: create room → place bets → idempotent retry → settle → history/statistics/ledger.
-- The current kick rule immediately revokes room access but preserves all accepted bets until settlement. Membership is closed afterward.
+- Kick tests cover both branches: refund-and-remove during betting, and preserve-then-settle during revealing.
 
 ## Deferred Items That Depend on Other Team Members
 
-- Enabling persistent mode in `server.js`: waiting for the login module to provide `authenticateSocket(socket)` and the logout/session-expiration rules.
+- Enabling persistent mode in `server/index.js`: waiting for the login module to provide `authenticateSocket(socket)` and the logout/session-expiration rules.
 - Connecting a real session verifier to `authenticateSocket`, `authorizeSocketCommand`, and `authenticateHttp`. The repository does not currently contain a backend login module.
 - Admin grants, rewarded advertisements, audit UI, and additional administration operations.
-- The team must confirm whether the current kick rule—preserving bets until settlement—is the intended final behavior or whether bets should be refunded when a player is kicked during the betting phase.
+- Kick semantics now follow the project plan: during betting the player's accepted stakes are refunded atomically before membership closes; during revealing the stake remains for settlement and membership closes afterward.
 
 Before enabling persistent mode by default, the following commands must be run against a clean PostgreSQL test database:
 

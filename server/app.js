@@ -45,9 +45,15 @@ export function sendJson(res, status, body) {
 }
 
 function pagination(url) {
+  const requestedLimit = Number(url.searchParams.get('limit'));
+  const requestedOffset = Number(url.searchParams.get('offset'));
   return {
-    limit: Math.min(Math.max(Number(url.searchParams.get('limit')) || 20, 1), 100),
-    offset: Math.max(Number(url.searchParams.get('offset')) || 0, 0),
+    limit: Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 20,
+    offset: Number.isSafeInteger(requestedOffset) && requestedOffset >= 0
+      ? requestedOffset
+      : 0,
   };
 }
 
@@ -111,6 +117,7 @@ async function handlePersistentDataApi(req, res, url, options) {
     const knownCode = typeof error?.code === 'string' ? error.code : 'INTERNAL_ERROR';
     const status = knownCode === 'AUTH_REQUIRED' ? 401
       : knownCode === 'ACCOUNT_DISABLED' ? 403
+        : ['ROOM_NOT_FOUND', 'WALLET_NOT_FOUND'].includes(knownCode) ? 404
         : knownCode === 'DATABASE_UNAVAILABLE' ? 503
           : 500;
     if (status === 500) console.error('Persistent data API failed:', error);
@@ -136,7 +143,7 @@ function validateConfig(config) {
 }
 
 export async function createGameServer(options = {}) {
-  const config = structuredClone(options.config ?? JSON.parse(await readFile(resolve(projectRoot, 'game-config.json'), 'utf8')));
+  const config = structuredClone(options.config ?? JSON.parse(await readFile(resolve(projectRoot, 'config/game-config.json'), 'utf8')));
   validateConfig(config);
   if (options.persistence && typeof options.persistence.recoverInterruptedGames === 'function') {
     await options.persistence.recoverInterruptedGames();
@@ -155,12 +162,19 @@ export async function createGameServer(options = {}) {
       if (req.method === 'GET' && url.pathname === '/api/health') {
         return sendJson(res, 200, { ok: true, rooms: game.rooms.size, players: game.sessions.size });
       }
+      if (typeof options.handleHttp === 'function') {
+        const handled = await options.handleHttp(req, res, url, { game, io });
+        if (handled) return;
+      }
       if (await handlePersistentDataApi(req, res, url, options)) return;
       if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
       if (!['GET', 'HEAD'].includes(req.method)) return sendJson(res, 404, { error: 'Not found' });
 
       const pathname = decodeURIComponent(url.pathname);
-      const candidate = resolve(distRoot, `.${pathname === '/' ? '/index.html' : pathname}`);
+      const publicPath = pathname === '/'
+        ? '/index.html'
+        : ['/admin', '/admin/'].includes(pathname) ? '/admin.html' : pathname;
+      const candidate = resolve(distRoot, `.${publicPath}`);
       if (!candidate.startsWith(`${distRoot}${sep}`) || !mimeTypes[extname(candidate)]) {
         return sendJson(res, 404, { error: 'Not found' });
       }
@@ -287,23 +301,37 @@ export async function createGameServer(options = {}) {
       });
     }
 
-    socket.on('client_throw_item', (payload, acknowledge) => {
+    socket.on('client_throw_item', async (payload, acknowledge) => {
       try {
+        if (isRateLimited()) {
+          if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Bạn thao tác quá nhanh.' });
+          return;
+        }
+        await authorizeCommand('client_throw_item', payload);
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
           if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Dữ liệu không hợp lệ.' });
           return;
         }
 
         const membership = game.memberships.get(socket.id);
-        const roomCode = payload.roomId || payload.roomCode || membership?.code;
-        if (!roomCode) {
+        if (!membership) {
           if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Bạn chưa tham gia phòng.' });
           return;
         }
+        const requestedRoomCode = payload.roomId || payload.roomCode;
+        if (requestedRoomCode && requestedRoomCode !== membership.code) {
+          if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Phòng gửi lên không khớp với phiên hiện tại.' });
+          return;
+        }
+        const roomCode = membership.code;
 
         const room = game.rooms.get(roomCode);
         if (!room) {
           if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Không tìm thấy phòng.' });
+          return;
+        }
+        if (payload.toId && !room.players.has(payload.toId)) {
+          if (typeof acknowledge === 'function') acknowledge({ ok: false, error: 'Người nhận không còn trong phòng.' });
           return;
         }
 
@@ -311,7 +339,7 @@ export async function createGameServer(options = {}) {
         const itemType = allowedItems.includes(payload.itemType) ? payload.itemType : 'egg';
 
         const eventData = {
-          fromId: payload.fromId || membership?.playerId || socket.id,
+          fromId: membership.playerId,
           toId: payload.toId || null,
           itemType,
           startPos: {

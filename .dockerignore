@@ -3,4 +3,8 @@ dist
 .git
 .env*
 *.log
-docs/archive
+docs
+tests
+videos
+.tools
+scratch

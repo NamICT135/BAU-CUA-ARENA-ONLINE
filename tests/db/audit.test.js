@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { AuditLogger } from '../../src/db/AuditLogger.js';
-import { UserRepository } from '../../src/repositories/UserRepository.js';
+import { AuditLogger } from '../../server/db/AuditLogger.js';
+import { UserRepository } from '../../server/repositories/UserRepository.js';
 
 describe('AuditLogger Test Suite', () => {
   const userRepo = new UserRepository();

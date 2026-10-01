@@ -1,11 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { UserRepository } from '../../src/repositories/UserRepository.js';
-import { RoomRepository } from '../../src/repositories/RoomRepository.js';
-import { BetRepository } from '../../src/repositories/BetRepository.js';
-import { HistoryRepository } from '../../src/repositories/HistoryRepository.js';
-import { StatisticsRepository } from '../../src/repositories/StatisticsRepository.js';
-import { ProcessedCommandRepository } from '../../src/repositories/ProcessedCommandRepository.js';
+import { UserRepository } from '../../server/repositories/UserRepository.js';
+import { RoomRepository } from '../../server/repositories/RoomRepository.js';
+import { BetRepository } from '../../server/repositories/BetRepository.js';
+import { HistoryRepository } from '../../server/repositories/HistoryRepository.js';
+import { StatisticsRepository } from '../../server/repositories/StatisticsRepository.js';
+import { ProcessedCommandRepository } from '../../server/repositories/ProcessedCommandRepository.js';
 
 describe('A5 & A7: History, Statistics & Processed Commands Test Suite', () => {
   const userRepo = new UserRepository();

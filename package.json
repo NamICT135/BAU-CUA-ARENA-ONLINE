@@ -6,17 +6,19 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:client": "vite",
-    "dev:server": "node server.js",
-    "server": "node server.js",
+    "dev:server": "node server/index.js",
+    "server": "node server/index.js",
     "prestart": "npm run build",
-    "start": "node server.js",
+    "start": "node server/index.js",
     "test": "npm run test:all",
-    "test:core": "node --test tests/automatic.test.js tests/database-game-integration.test.js tests/game.test.js tests/history.test.js tests/media.test.js tests/multiplayer.test.js",
+    "test:core": "node --test tests/client/admin-dialog.test.js tests/server/automatic.test.js tests/server/database-game-integration.test.js tests/server/game.test.js tests/client/history.test.js tests/server/media.test.js tests/server/multiplayer.test.js",
     "test:db": "node scripts/run-db-tests.js",
     "test:all": "npm run test:core && npm run test:db",
     "build": "vite build",
     "preview": "vite preview",
-    "db:migrate": "node scripts/db-migrate.js"
+    "db:migrate": "node scripts/db-migrate.js",
+    "admin:create": "node scripts/create-admin.js",
+    "admin:mfa-reset": "node scripts/reset-admin-mfa.js"
   },
   "engines": {
     "node": ">=24 <25"
@@ -25,7 +27,9 @@
     "vite": "^8.2.2"
   },
   "dependencies": {
+    "argon2": "^0.44.0",
     "dotenv": "^18.0.3",
+    "nodemailer": "^10.0.13",
     "pg": "^8.23.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3"

@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { TransactionManager } from '../../src/db/TransactionManager.js';
-import { query } from '../../src/db/connection.js';
+import { TransactionManager } from '../../server/db/TransactionManager.js';
+import { query } from '../../server/db/connection.js';
 
 describe('TransactionManager Test Suite', () => {
   test('Should auto-commit on success', async () => {

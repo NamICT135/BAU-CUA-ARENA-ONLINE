@@ -20,7 +20,7 @@ flowchart LR
     subgraph CLIENT[Trình duyệt người chơi]
         UI[Giao diện bàn Bầu Cua]
         MAIN[src/main.js<br/>render + thao tác + Socket.IO]
-        BOWL[src/bowl.js<br/>mở bát và công bố kết quả]
+        BOWL[src/features/game/bowl.js<br/>mở bát và công bố kết quả]
         STORE[sessionStorage<br/>token phiên theo từng tab]
         ASSET[Ảnh, chip, âm nhạc và CSS]
         UI --> MAIN
@@ -315,12 +315,12 @@ Server không gửi token vào broadcast và không gửi phân bố cược the
 |---|---|
 | `index.html` | Khung sảnh, bàn game, các nút và dialog |
 | `src/main.js` | Tương tác UI, render trạng thái, Socket.IO, cược, âm thanh, fullscreen và quản trị |
-| `src/bowl.js` | Logic lớp phủ mở bát, kéo bát 360° và tự công bố |
-| `src/arena.css` | Toàn bộ bố cục casino, responsive, chip, bàn, bát và chế độ ngang |
-| `src/style.css` | Style nền tảng và một số thành phần dùng chung |
+| `src/features/game/bowl.js` | Logic lớp phủ mở bát, kéo bát 360° và tự công bố |
+| `src/features/game/arena.css` | Toàn bộ bố cục casino, responsive, chip, bàn, bát và chế độ ngang |
+| `src/styles/base.css` | Style nền tảng và một số thành phần dùng chung |
 | `server/app.js` | HTTP API, static files, Socket.IO, rate limit và origin policy |
 | `server/game.js` | Luật chơi, vòng đời phòng, cược, trả thưởng, phiên và quyền host |
-| `game-config.json` | Số dư khởi tạo, chip cấu hình và danh sách linh vật |
+| `config/game-config.json` | Số dư khởi tạo, chip cấu hình và danh sách linh vật |
 | `public/assets/arena` | Background, logo, chip, bát/đĩa, xúc xắc và hình linh vật |
 | `public/assets/audio` | Nhạc nền Tết |
 | `public/manifest.webmanifest` | Cấu hình PWA/toàn màn hình/hướng ngang |

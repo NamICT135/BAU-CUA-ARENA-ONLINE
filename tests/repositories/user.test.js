@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { UserRepository } from '../../src/repositories/UserRepository.js';
-import { query } from '../../src/db/connection.js';
+import { UserRepository } from '../../server/repositories/UserRepository.js';
+import { query } from '../../server/db/connection.js';
 
 describe('UserRepository Test Suite', () => {
   const userRepo = new UserRepository();
@@ -34,6 +34,17 @@ describe('UserRepository Test Suite', () => {
     const user = await userRepo.findByEmail(testUser.email.toUpperCase());
     assert.ok(user);
     assert.strictEqual(user.id, createdUserId);
+  });
+
+  test('Should reject a username duplicate that differs only by letter case', async () => {
+    await assert.rejects(
+      () => userRepo.createUser({
+        ...testUser,
+        username: testUser.username.toUpperCase(),
+        email: `case_${Date.now()}@example.com`,
+      }),
+      error => error?.code === '23505'
+    );
   });
 
   test('Should update user profile', async () => {

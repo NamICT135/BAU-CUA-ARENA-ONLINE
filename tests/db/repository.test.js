@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { Repository } from '../../src/db/Repository.js';
+import { Repository } from '../../server/db/Repository.js';
 
 describe('Base Repository Pattern', () => {
   const repo = new Repository('users');

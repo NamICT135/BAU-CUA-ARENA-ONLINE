@@ -1,5 +1,6 @@
 import { createServer as createViteServer } from 'vite';
 import { createGameServer } from '../server/app.js';
+import { createProductionGameServer } from '../server/production.js';
 
 function option(name) {
   const direct = process.argv.indexOf(name);
@@ -15,7 +16,11 @@ const vitePort = requestedPort === undefined ? undefined : Number(requestedPort)
 if (!Number.isSafeInteger(apiPort) || apiPort < 1 || apiPort > 65535) throw new Error('API_PORT must be a valid port.');
 if (vitePort !== undefined && (!Number.isSafeInteger(vitePort) || vitePort < 1 || vitePort > 65535)) throw new Error('--port must be a valid port.');
 
-const game = await createGameServer();
+// Use the same authenticated PostgreSQL application as `npm start`.
+// The legacy RAM server has no account or Admin HTTP routes.
+const game = process.env.PERSISTENCE_ENABLED === 'false'
+  ? await createGameServer()
+  : await createProductionGameServer();
 let vite;
 let closing = false;
 

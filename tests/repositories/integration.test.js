@@ -1,9 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { UserRepository } from '../../src/repositories/UserRepository.js';
-import { SessionRepository } from '../../src/repositories/SessionRepository.js';
-import { RoomRepository } from '../../src/repositories/RoomRepository.js';
-import { BetRepository } from '../../src/repositories/BetRepository.js';
+import { UserRepository } from '../../server/repositories/UserRepository.js';
+import { SessionRepository } from '../../server/repositories/SessionRepository.js';
+import { RoomRepository } from '../../server/repositories/RoomRepository.js';
+import { BetRepository } from '../../server/repositories/BetRepository.js';
+import { WalletService } from '../../server/services/WalletService.js';
 
 describe('Complete Repositories Integration Suite', () => {
   const userRepo = new UserRepository();
@@ -29,6 +30,8 @@ describe('Complete Repositories Integration Suite', () => {
       passwordHash: 'dummy_hash',
       displayName: 'Regular Player',
     });
+    await WalletService.createWalletWithWelcomeGrant(hostUser.id);
+    await WalletService.createWalletWithWelcomeGrant(playerUser.id);
 
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
     const session = await sessionRepo.createSession(
